@@ -1,8 +1,8 @@
 //
 //  PyContentView.swift
-//  TextClassifier
+//  YKTextClassifier
 //
-//  Created by Yakamoz on 2026/2/8.
+//  Created by YakaLiu on 2026/2/9.
 //
 
 import SwiftUI

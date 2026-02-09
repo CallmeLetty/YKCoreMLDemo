@@ -1,8 +1,8 @@
 //
 //  SentimentPredictor.swift
-//  TextClassifier
+//  YKTextClassifier
 //
-//  Created by Yakamoz on 2026/2/7.
+//  Created by YakaLiu on 2026/2/9.
 //
 
 
