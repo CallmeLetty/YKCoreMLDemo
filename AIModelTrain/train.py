@@ -1,18 +1,19 @@
+import torch                          # PyTorch 核心库
+import torch.nn as nn                 # 神经网络模块
+from torch.utils.data import DataLoader, Dataset  # 数据加载工具
+from collections import Counter       # 计数器（这里未直接使用，在 model_def 中用到）
+from model_def import ChineseVocab, ChineseClassifier  # 导入你之前定义的词表和模型
+import jieba                          # 中文分词
+import pickle                         # 序列化工具，用于保存词表
+import pandas as pd                   # 数据处理库，用于读取 CSV
 
-import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader, Dataset
-from collections import Counter
-from model_def import ChineseVocab, ChineseClassifier
-import jieba
-import pickle
-import pandas as pd  # 导入 Pandas
 
 # ---------------------------------------------------------
 # 2. 中文分词与词表构建
 # ---------------------------------------------------------
 def chinese_tokenizer(text):
-    # 使用 jieba 进行精确模式分词
+    # 使用 jieba 进行精确模式分词，将文本切分成词语列表
+    # 这个函数在当前代码中没有被调用，因为分词逻辑已经在 ChineseVocab.encode() 中实现了。
     return list(jieba.cut(text))
 
 # ---------------------------------------------------------
@@ -20,32 +21,34 @@ def chinese_tokenizer(text):
 # ---------------------------------------------------------
 class SimpleDataset(Dataset):
     def __init__(self, data, vocab):
-        self.data = data
-        self.vocab = vocab
+        self.data = data      # 存储原始数据 [(label, text), ...]
+        self.vocab = vocab    # 词表对象
         
     def __len__(self):
-        return len(self.data)
+        return len(self.data) # 返回数据集大小，DataLoader 需要
     
     def __getitem__(self, idx):
-        label, text = self.data[idx]
-        return label, self.vocab.encode(text)
-        
-def collate_fn(batch):
-    labels, texts, offsets = [], [], [0]
-    for _label, _text_ids in batch:
-        labels.append(_label)
-        t = torch.tensor(_text_ids, dtype=torch.int64)
-        texts.append(t)
-        offsets.append(t.size(0))
+        label, text = self.data[idx]           # 获取第 idx 条数据
+        return label, self.vocab.encode(text)  # 返回标签和编码后的索引列表
     
-    labels = torch.tensor(labels, dtype=torch.float32)
-    offsets = torch.tensor(offsets[:-1]).cumsum(dim=0)
-    texts = torch.cat(texts)
-    return labels, texts, offsets
+    def collate_fn(batch):
+        labels, texts = [], []
+        max_len = max(len(text_ids) for _, text_ids in batch)  # 找最长序列
+        
+        for _label, _text_ids in batch:
+            labels.append(_label)
+            # 填充到相同长度
+            padded = _text_ids + [1] * (max_len - len(_text_ids))  # 1 是 <pad>
+            texts.append(padded)
+        
+        labels = torch.tensor(labels, dtype=torch.long)
+        texts = torch.tensor(texts, dtype=torch.long)
+        return labels, texts  # [batch], [batch, max_len]
+
 
         
 if __name__ == "__main__":
-# -------------------------------------------------------
+    # -------------------------------------------------------
     # 步骤 1: 从 CSV 加载数据
     # -------------------------------------------------------
     csv_path = 'data.csv' # 你的文件名
