@@ -15,15 +15,9 @@ struct FirstTabView: View {
     @State private var classifier: YKTextClassifier?
     @State private var nlModel: NLModel?
     @State private var debounceTask: Task<Void, Never>?
-    @State private var floatingEmojis: [FloatingEmoji] = []
-    
-    // 浮动表情的数据结构
-    struct FloatingEmoji: Identifiable {
-        let id = UUID()
-        let emoji: String
-        var offset: CGSize = .zero
-        var opacity: Double = 1.0
-    }
+    @State private var showEmoji: Bool = false
+    @State private var currentEmoji: String = ""
+    @State private var emojiScale: CGFloat = 0.5
     
     var body: some View {
         ZStack {
@@ -103,12 +97,11 @@ struct FirstTabView: View {
                 loadModel()
             }
             
-            // 浮动表情层
-            ForEach(floatingEmojis) { emoji in
-                Text(emoji.emoji)
-                    .font(.system(size: 60))
-                    .offset(emoji.offset)
-                    .opacity(emoji.opacity)
+            // 跳动表情层
+            if showEmoji {
+                Text(currentEmoji)
+                    .font(.system(size: 100))
+                    .scaleEffect(emojiScale)
             }
         }
     }
@@ -171,11 +164,11 @@ struct FirstTabView: View {
             if let result {
                 classificationResult = result
                 
-                // 根据标签显示浮动表情
+                // 根据标签显示跳动表情
                 if result.lowercased().contains("positive") {
-                    showFloatingEmoji("😊")
+                    showBouncingEmoji("😊")
                 } else if result.lowercased().contains("negative") {
-                    showFloatingEmoji("😔")
+                    showBouncingEmoji("😡")
                 }
             } else {
                 classificationResult = result ?? "未知"
@@ -186,35 +179,21 @@ struct FirstTabView: View {
         }
     }
     
-    // 显示浮动表情
-    func showFloatingEmoji(_ emoji: String) {
-        // 执行动画
-        func animateEmoji(id: UUID) {
-            guard let index = floatingEmojis.firstIndex(where: { $0.id == id }) else { return }
-            
-            // 随机水平偏移
-            let randomX = CGFloat.random(in: -100...100)
-            let upwardY = CGFloat.random(in: -300...(-200))
-            
-            withAnimation(.easeOut(duration: 2.0)) {
-                floatingEmojis[index].offset = CGSize(width: randomX, height: upwardY)
-                floatingEmojis[index].opacity = 0
-            }
-            
-            // 动画结束后移除表情
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                floatingEmojis.removeAll { $0.id == id }
-            }
+    // 显示跳动表情
+    func showBouncingEmoji(_ emoji: String) {
+        currentEmoji = emoji
+        showEmoji = true
+        emojiScale = 0.5
+        
+        // 跳动动画（重复多次）
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.5, blendDuration: 0).repeatCount(6, autoreverses: true)) {
+            emojiScale = 1.2
         }
         
-        // 创建多个表情以增强效果
-        for i in 0..<3 {
-            let newEmoji = FloatingEmoji(emoji: emoji)
-            floatingEmojis.append(newEmoji)
-            
-            // 为每个表情添加不同的延迟
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.5) {
-                animateEmoji(id: newEmoji.id)
+        // 2秒后消失
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            withAnimation(.easeOut(duration: 0.3)) {
+                showEmoji = false
             }
         }
     }
