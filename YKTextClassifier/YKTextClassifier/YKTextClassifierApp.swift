@@ -19,7 +19,7 @@ struct TextClassifierApp: App {
 struct MainTabView: View {
     var body: some View {
         TabView {
-            ContentView()
+            FirstTabView()
                 .tabItem {
                     Label("文本分类", systemImage: "doc.text.magnifyingglass")
                 }
@@ -34,41 +34,5 @@ struct MainTabView: View {
                     Label("设置", systemImage: "gearshape")
                 }
         }
-    }
-}
-
-// 第二个Tab - 历史记录
-struct SecondTabView: View {
-    var body: some View {
-        VStack {
-            Text("历史记录")
-                .font(.title)
-                .fontWeight(.bold)
-                .padding()
-            
-            Text("这里可以显示分类历史")
-                .foregroundColor(.gray)
-            
-            Spacer()
-        }
-        .padding()
-    }
-}
-
-// 第三个Tab - 设置
-struct ThirdTabView: View {
-    var body: some View {
-        VStack {
-            Text("设置")
-                .font(.title)
-                .fontWeight(.bold)
-                .padding()
-            
-            Text("这里可以配置模型参数")
-                .foregroundColor(.gray)
-            
-            Spacer()
-        }
-        .padding()
     }
 }

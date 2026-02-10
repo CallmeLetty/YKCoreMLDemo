@@ -97,6 +97,6 @@ struct PyContentView: View {
 }
 
 #Preview {
-    ContentView()
+    FirstTabView()
 }
 

@@ -31,9 +31,15 @@ class SimpleDataset(Dataset):
         label, text = self.data[idx]           # 获取第 idx 条数据
         return label, self.vocab.encode(text)  # 返回标签和编码后的索引列表
     
+    # 将一个批次（batch）的样本整理成模型可以接受的张量格式。
+    # 在 NLP 任务中，每条文本的长度不同：
+    # "好" → [23] # 长度 1 "很好用" → [45, 67, 89] # 长度 3 "这个商品不错" → [12, 34, 56, 78, 90] # 长度 5
+    # 但 PyTorch 要求批次数据必须是规整的张量，所以需要将短句填充到相同长度。
     def collate_fn(batch):
+        # 初始化两个空列表，分别用于收集标签和填充后的文本。
         labels, texts = [], []
-        max_len = max(len(text_ids) for _, text_ids in batch)  # 找最长序列
+        # 找出当前批次中最长的序列长度
+        max_len = max(len(text_ids) for _, text_ids in batch)
         
         for _label, _text_ids in batch:
             labels.append(_label)
@@ -41,7 +47,14 @@ class SimpleDataset(Dataset):
             padded = _text_ids + [1] * (max_len - len(_text_ids))  # 1 是 <pad>
             texts.append(padded)
         
+        # 循环结束后的结果
+        # labels = [1, 0, 1] texts = [ [23, 45, 67, 1], # 原长3，填充1个 [12, 34, 1, 1], # 原长2，填充2个 [56, 78, 90, 11] # 原长4，无需填充 ]
+        
+        # 将标签列表转为 PyTorch 张量。
+        # dtype为64位整数，CrossEntropyLoss 要求标签为此类型
         labels = torch.tensor(labels, dtype=torch.long)
+        
+        # 将文本列表转为二维张量。
         texts = torch.tensor(texts, dtype=torch.long)
         return labels, texts  # [batch], [batch, max_len]
 
@@ -51,11 +64,10 @@ if __name__ == "__main__":
     # -------------------------------------------------------
     # 步骤 1: 从 CSV 加载数据
     # -------------------------------------------------------
-    csv_path = 'data.csv' # 你的文件名
+    csv_path = 'data.csv'
     print(f"正在从 {csv_path} 读取数据...")
     
     # read_csv 会自动处理表头
-    # 如果你的 CSV 编码有问题，可以尝试加 encoding='utf-8' 或 'gbk'
     df = pd.read_csv(csv_path)
     
     # 检查 CSV 是否有空行，并清理掉

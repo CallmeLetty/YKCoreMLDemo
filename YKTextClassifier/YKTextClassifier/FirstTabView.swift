@@ -8,20 +8,30 @@ import SwiftUI
 import CoreML
 import NaturalLanguage
 
-struct ContentView: View {
+struct FirstTabView: View {
     @State private var inputText: String = ""
     @State private var classificationResult: String = ""
     @State private var isAnalyzing: Bool = false
     @State private var classifier: YKTextClassifier?
     @State private var nlModel: NLModel?
     @State private var debounceTask: Task<Void, Never>?
+    @State private var floatingEmojis: [FloatingEmoji] = []
+    
+    // 浮动表情的数据结构
+    struct FloatingEmoji: Identifiable {
+        let id = UUID()
+        let emoji: String
+        var offset: CGSize = .zero
+        var opacity: Double = 1.0
+    }
     
     var body: some View {
-        VStack(spacing: 20) {
-            Text("中文文本分类器")
-                .font(.title)
-                .fontWeight(.bold)
-                .padding(.top)
+        ZStack {
+            VStack(spacing: 20) {
+                Text("中文文本分类器")
+                    .font(.title)
+                    .fontWeight(.bold)
+                    .padding(.top)
             
             // 输入文本框
             TextEditor(text: $inputText)
@@ -85,12 +95,21 @@ struct ContentView: View {
             }
             .padding(.horizontal)
             
-            Spacer()
-        }
-        .padding()
-        .onAppear {
-            // 在视图出现时加载模型
-            loadModel()
+                Spacer()
+            }
+            .padding()
+            .onAppear {
+                // 在视图出现时加载模型
+                loadModel()
+            }
+            
+            // 浮动表情层
+            ForEach(floatingEmojis) { emoji in
+                Text(emoji.emoji)
+                    .font(.system(size: 60))
+                    .offset(emoji.offset)
+                    .opacity(emoji.opacity)
+            }
         }
     }
     
@@ -151,6 +170,13 @@ struct ContentView: View {
             
             if let result {
                 classificationResult = result
+                
+                // 根据标签显示浮动表情
+                if result.lowercased().contains("positive") {
+                    showFloatingEmoji("😊")
+                } else if result.lowercased().contains("negative") {
+                    showFloatingEmoji("😔")
+                }
             } else {
                 classificationResult = result ?? "未知"
             }
@@ -159,8 +185,41 @@ struct ContentView: View {
             isAnalyzing = false
         }
     }
+    
+    // 显示浮动表情
+    func showFloatingEmoji(_ emoji: String) {
+        // 执行动画
+        func animateEmoji(id: UUID) {
+            guard let index = floatingEmojis.firstIndex(where: { $0.id == id }) else { return }
+            
+            // 随机水平偏移
+            let randomX = CGFloat.random(in: -100...100)
+            let upwardY = CGFloat.random(in: -300...(-200))
+            
+            withAnimation(.easeOut(duration: 2.0)) {
+                floatingEmojis[index].offset = CGSize(width: randomX, height: upwardY)
+                floatingEmojis[index].opacity = 0
+            }
+            
+            // 动画结束后移除表情
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                floatingEmojis.removeAll { $0.id == id }
+            }
+        }
+        
+        // 创建多个表情以增强效果
+        for i in 0..<3 {
+            let newEmoji = FloatingEmoji(emoji: emoji)
+            floatingEmojis.append(newEmoji)
+            
+            // 为每个表情添加不同的延迟
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.5) {
+                animateEmoji(id: newEmoji.id)
+            }
+        }
+    }
 }
 
 #Preview {
-    ContentView()
+    FirstTabView()
 }
