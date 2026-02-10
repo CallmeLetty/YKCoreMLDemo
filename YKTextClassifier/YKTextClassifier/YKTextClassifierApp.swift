@@ -23,12 +23,12 @@ struct MainTabView: View {
                 .tabItem {
                     Label("文本分类", systemImage: "doc.text.magnifyingglass")
                 }
-            
+
             SecondTabView()
                 .tabItem {
                     Label("历史记录", systemImage: "clock.arrow.circlepath")
                 }
-            
+
             ThirdTabView()
                 .tabItem {
                     Label("设置", systemImage: "gearshape")

@@ -5,8 +5,9 @@
 //  Created by Yakamoz on 2026/2/10.
 //
 
-import SwiftUI
 import NaturalLanguage
+import SwiftUI
+import CoreML
 
 // 评论分类类型
 enum CommentCategory: String, CaseIterable {
@@ -14,6 +15,16 @@ enum CommentCategory: String, CaseIterable {
     case negative = "批评建议"
     case neutral = "中立讨论"
     
+    init?(rawValue: String) {
+        if rawValue == "positive" {
+            self = .positive
+        } else if rawValue == "negative" {
+            self = .negative
+        } else {
+            self = .neutral
+        }
+    }
+
     var color: Color {
         switch self {
         case .positive: return .green
@@ -21,7 +32,7 @@ enum CommentCategory: String, CaseIterable {
         case .neutral: return .blue
         }
     }
-    
+
     var icon: String {
         switch self {
         case .positive: return "hand.thumbsup.fill"
@@ -38,7 +49,7 @@ struct Comment: Identifiable {
     let author: String
     let date: Date
     var category: CommentCategory?
-    
+
     init(content: String, author: String, date: Date = Date()) {
         self.content = content
         self.author = author
@@ -48,41 +59,28 @@ struct Comment: Identifiable {
 
 // 评论分类器
 class CommentClassifier {
-    static func classify(_ text: String) -> CommentCategory {
-        // 使用 NaturalLanguage 框架进行情感分析
-        let tagger = NLTagger(tagSchemes: [.sentimentScore])
-        tagger.string = text
-        
-        let (sentiment, _) = tagger.tag(at: text.startIndex, unit: .paragraph, scheme: .sentimentScore)
-        
-        if let sentimentValue = sentiment {
-            let score = Double(sentimentValue.rawValue) ?? 0.0
-            
-            // 根据情感分数分类
-            if score > 0.3 {
-                return .positive
-            } else if score < -0.1 {
-                return .negative
-            } else {
-                return .neutral
-            }
+    private var nlModel: NLModel?
+    
+    init?() {
+        guard let modelURL = Bundle.main.url(forResource: "YKTextClassifier", withExtension: "mlmodelc"),
+              let nlModel = try? NLModel(contentsOf: modelURL) else {
+            return nil
         }
         
-        // 关键词辅助判断
-        let positiveKeywords = ["好", "棒", "优秀", "喜欢", "满意", "推荐", "赞", "不错", "完美", "优质"]
-        let negativeKeywords = ["差", "烂", "问题", "bug", "建议", "改进", "失望", "糟糕", "不好", "缺点"]
-        
-        let lowercased = text.lowercased()
-        let positiveCount = positiveKeywords.filter { lowercased.contains($0) }.count
-        let negativeCount = negativeKeywords.filter { lowercased.contains($0) }.count
-        
-        if positiveCount > negativeCount {
-            return .positive
-        } else if negativeCount > positiveCount {
-            return .negative
-        } else {
+        self.nlModel = nlModel
+    }
+
+    func classify(_ text: String) -> CommentCategory {
+        guard let hypotheses = nlModel?.predictedLabelHypotheses(for: text, maximumCount: 2) else {
             return .neutral
         }
+
+        for (label, confidence) in hypotheses {
+            if confidence > 0.56 {
+                return CommentCategory.init(rawValue: label) ?? .neutral
+            }
+        }
+        return .neutral
     }
 }
 
@@ -91,14 +89,15 @@ struct SecondTabView: View {
     @State private var comments: [Comment] = []
     @State private var isLoading = false
     @State private var selectedCategory: CommentCategory? = nil
-    
+    private var classifier = CommentClassifier()
+
     var filteredComments: [Comment] {
         if let category = selectedCategory {
             return comments.filter { $0.category == category }
         }
         return comments
     }
-    
+
     var categoryCounts: [CommentCategory: Int] {
         var counts: [CommentCategory: Int] = [:]
         for category in CommentCategory.allCases {
@@ -106,7 +105,7 @@ struct SecondTabView: View {
         }
         return counts
     }
-    
+
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
@@ -129,18 +128,18 @@ struct SecondTabView: View {
                     .padding()
                 }
                 .background(Color(.systemGroupedBackground))
-                
+
                 // 评论列表
                 if comments.isEmpty {
                     VStack(spacing: 20) {
                         Image(systemName: "text.bubble")
                             .font(.system(size: 60))
                             .foregroundColor(.gray)
-                        
+
                         Text("暂无评论")
                             .font(.headline)
                             .foregroundColor(.gray)
-                        
+
                         Button(action: loadComments) {
                             Label("加载示例评论", systemImage: "arrow.clockwise")
                                 .padding()
@@ -179,35 +178,41 @@ struct SecondTabView: View {
     
     private func loadComments() {
         isLoading = true
-        
+
         // 模拟网络请求延迟
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             // 示例评论数据
             let sampleComments = [
-                Comment(content: "这个应用真的太好用了！界面设计很漂亮，功能也很强大，强烈推荐！", author: "张三"),
-                Comment(content: "用了一段时间，整体不错，但是希望能增加夜间模式功能。", author: "李四"),
-                Comment(content: "分类准确率很高，对我的工作帮助很大，五星好评！", author: "王五"),
-                Comment(content: "应用经常闪退，希望尽快修复这个bug，影响使用体验。", author: "赵六"),
-                Comment(content: "功能还可以，但是加载速度有点慢，建议优化一下性能。", author: "钱七"),
-                Comment(content: "非常满意，开发团队很用心，期待更多功能更新。", author: "孙八"),
-                Comment(content: "界面设计一般，功能也比较基础，没有什么特别之处。", author: "周九"),
-                Comment(content: "完美的应用！解决了我的痛点，值得购买会员。", author: "吴十"),
-                Comment(content: "有一些小问题，比如文字分类有时不太准确，希望改进算法。", author: "郑十一"),
-                Comment(content: "中规中矩的应用，能满足基本需求，价格合理。", author: "冯十二"),
-                Comment(content: "太棒了！这是我用过最好的文本分类工具，效率提升明显。", author: "陈十三"),
-                Comment(content: "建议增加批量处理功能，现在一条条处理太慢了。", author: "褚十四"),
-                Comment(content: "还行吧，没有特别惊艳，也没有明显缺点。", author: "卫十五"),
-                Comment(content: "客服响应很快，问题解决及时，体验很好！", author: "蒋十六"),
-                Comment(content: "价格有点贵，功能和同类产品差不多，性价比不高。", author: "沈十七")
+                Comment(content: "主播声音太治愈了，通勤路上的必备良药。", author: "张三"),
+                Comment(content: "信息量大又不枯燥，听完总想立刻分享给朋友。", author: "李四"),
+                Comment(content: "这是我听过最有思考深度的中文播客之一！", author: "王五"),
+                Comment(content: "更新稳定、制作精良，诚意满满！", author: "赵六"),
+                Comment(content: "主题选得特别好，总能戳中我关心的话题。", author: "钱七"),
+                Comment(content: "不只是娱乐，更是启发，感谢你们的声音陪伴。", author: "孙八"),
+                Comment(content: "节奏把控一流，从头到尾都让人沉浸其中。", author: "周九"),
+                Comment(content: "听完这期，我重新审视了自己的生活方式，太有价值了！", author: "吴"),
+                Comment(content: "主播的见解独到，逻辑清晰，每次都有新视角。", author: "郑一"),
+                Comment(content: "音质超好，剪辑干净，细节满分！", author: "冯二"),
+                Comment(content: "真正用心做内容的播客，值得被更多人听到。", author: "陈三"),
+                Comment(content: "每次更新都像收到一份精神礼物。", author: "褚四"),
+                Comment(content: "内容既有温度又有深度，听完心里暖暖的。", author: "卫五"),
+                Comment(content: "适合深夜静静聆听，思绪跟着一起飞翔。", author: "蒋六"),
+                Comment(content: "不跟风、不浮躁，坚持做有质感的内容。", author: "蒋六"),
+                Comment(content: "内容太水了，感觉就是东拼西凑的网络信息，毫无深度。", author: "蒋六"),
+                Comment(content: "主播语速忽快忽慢，听起来特别累，剪辑也粗糙。", author: "蒋六"),
+                Comment(content: "每期都在自说自话，完全不考虑听众的真实需求。", author: "沈七"),
+                Comment(content: "广告插得太频繁，正经内容还没广告长。", author: "沈七"),
+                Comment(content: "音质差到像用手机在厕所录的，根本听不下去。", author: "沈七"),
+                Comment(content: "更新极不稳定，追更半年才出3期，诚意何在？", author: "沈七"),
             ]
             
             // 对每条评论进行分类
             self.comments = sampleComments.map { comment in
                 var classified = comment
-                classified.category = CommentClassifier.classify(comment.content)
+                classified.category = self.classifier?.classify(comment.content) ?? .neutral
                 return classified
             }
-            
+
             isLoading = false
         }
     }
@@ -218,21 +223,21 @@ struct CategoryCard: View {
     let category: CommentCategory
     let count: Int
     let isSelected: Bool
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: category.icon)
                     .font(.title2)
                     .foregroundColor(category.color)
-                
+
                 Spacer()
-                
+
                 Text("\(count)")
                     .font(.title)
                     .fontWeight(.bold)
             }
-            
+
             Text(category.rawValue)
                 .font(.subheadline)
                 .foregroundColor(.secondary)
@@ -252,16 +257,16 @@ struct CategoryCard: View {
 // 评论行视图
 struct CommentRow: View {
     let comment: Comment
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(comment.author)
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                
+
                 Spacer()
-                
+
                 if let category = comment.category {
                     HStack(spacing: 4) {
                         Image(systemName: category.icon)
@@ -276,20 +281,19 @@ struct CommentRow: View {
                     .cornerRadius(8)
                 }
             }
-            
+
             Text(comment.content)
                 .font(.body)
                 .foregroundColor(.primary)
                 .lineLimit(nil)
-            
-            Text(comment.date, style: .relative)
+
+            Text(comment.date, style: .time)
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
         .padding(.vertical, 8)
     }
 }
-
 
 #Preview {
     SecondTabView()

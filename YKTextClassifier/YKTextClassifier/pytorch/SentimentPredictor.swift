@@ -5,7 +5,6 @@
 //  Created by YakaLiu on 2026/2/9.
 //
 
-
 import CoreML
 import NaturalLanguage // 用于基础分词
 
@@ -17,12 +16,13 @@ class SentimentPredictor {
     init() {
         // 1. 初始化模型
         let config = MLModelConfiguration()
-        self.model = try! ChineseClassifier(configuration: config)
-        
+        model = try! ChineseClassifier(configuration: config)
+
         // 2. 加载词表 JSON
         if let url = Bundle.main.url(forResource: "vocab", withExtension: "json"),
-           let data = try? Data(contentsOf: url) {
-            self.wordToId = try! JSONSerialization.jsonObject(with: data) as! [String: Int]
+           let data = try? Data(contentsOf: url)
+        {
+            wordToId = try! JSONSerialization.jsonObject(with: data) as! [String: Int]
         }
     }
 
@@ -32,7 +32,7 @@ class SentimentPredictor {
         let tokenizer = NLTokenizer(unit: .word)
         tokenizer.string = text
         var tokens: [String] = []
-        tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { range, _ in
+        tokenizer.enumerateTokens(in: text.startIndex ..< text.endIndex) { range, _ in
             tokens.append(String(text[range]))
             return true
         }
@@ -51,7 +51,7 @@ class SentimentPredictor {
         guard let inputArray = try? MLMultiArray(shape: [1, maxLength as NSNumber], dataType: .int32) else {
             return "初始化输入失败"
         }
-        
+
         for (index, id) in tokenIds.enumerated() {
             inputArray[index] = id as NSNumber
         }

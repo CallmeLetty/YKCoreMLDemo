@@ -15,10 +15,10 @@ struct ThirdTabView: View {
                 .font(.title)
                 .fontWeight(.bold)
                 .padding()
-            
+
             Text("这里可以配置模型参数")
                 .foregroundColor(.gray)
-            
+
             Spacer()
         }
         .padding()

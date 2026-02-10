@@ -5,23 +5,23 @@
 //  Created by YakaLiu on 2026/2/9.
 //
 
-import SwiftUI
 import CoreML
+import SwiftUI
 
 struct PyContentView: View {
     @State private var inputText: String = ""
     @State private var classificationResult: String = ""
     @State private var isAnalyzing: Bool = false
-    
+
     let predictor = SentimentPredictor()
-    
+
     var body: some View {
         VStack(spacing: 20) {
             Text("中文文本分类器")
                 .font(.title)
                 .fontWeight(.bold)
                 .padding(.top)
-            
+
             // 输入文本框
             TextEditor(text: $inputText)
                 .frame(height: 150)
@@ -31,10 +31,10 @@ struct PyContentView: View {
                         .stroke(Color.gray.opacity(0.5), lineWidth: 1)
                 )
                 .padding(.horizontal)
-                .onChange(of: inputText) { oldValue, newValue in
+                .onChange(of: inputText) { _, _ in
                     analyzeText()
                 }
-            
+
             // 分析按钮
             Button(action: {
                 analyzeText()
@@ -55,12 +55,12 @@ struct PyContentView: View {
             }
             .disabled(inputText.isEmpty || isAnalyzing)
             .padding(.horizontal)
-            
+
             // 分类结果显示区域
             VStack(alignment: .leading, spacing: 10) {
                 Text("分类结果：")
                     .font(.headline)
-                
+
                 ScrollView {
                     Text(classificationResult.isEmpty ? "请输入文本进行分析" : classificationResult)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -71,25 +71,25 @@ struct PyContentView: View {
                 .frame(height: 150)
             }
             .padding(.horizontal)
-            
+
             Spacer()
         }
         .padding()
     }
-    
+
     // 分析文本的函数
     func analyzeText() {
         guard !inputText.isEmpty else {
             classificationResult = ""
             return
         }
-        
+
         isAnalyzing = true
-        
+
         let result = predictor.predict(text: inputText)
         print(result)
         classificationResult = result
-        
+
         DispatchQueue.main.async {
             isAnalyzing = false
         }
@@ -99,4 +99,3 @@ struct PyContentView: View {
 #Preview {
     FirstTabView()
 }
-
