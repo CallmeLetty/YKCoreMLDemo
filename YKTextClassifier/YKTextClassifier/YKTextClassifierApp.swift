@@ -29,7 +29,7 @@ struct MainTabView: View {
                     Label("历史记录", systemImage: "clock.arrow.circlepath")
                 }
 
-            ThirdTabView()
+            PyContentView()
                 .tabItem {
                     Label("设置", systemImage: "gearshape")
                 }

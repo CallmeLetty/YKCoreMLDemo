@@ -1,3 +1,4 @@
+import json
 import torch
 import coremltools as ct
 import pickle
@@ -51,3 +52,14 @@ mlmodel = ct.convert(
 )
 
 mlmodel.save("ChineseClassifier.mlpackage")
+
+
+
+# 将词表导出为 JSON
+# 假设 vocab.word2idx 是存储 {"词语": ID} 的字典
+word2idx = vocab.word2idx
+
+with open('vocab.json', 'w', encoding='utf-8') as f:
+    json.dump(word2idx, f, ensure_ascii=False)
+    
+print("vocab.json 已生成，请将其拖入 Xcode 工程。")

@@ -31,32 +31,32 @@ class SimpleDataset(Dataset):
         label, text = self.data[idx]           # 获取第 idx 条数据
         return label, self.vocab.encode(text)  # 返回标签和编码后的索引列表
     
-    # 将一个批次（batch）的样本整理成模型可以接受的张量格式。
-    # 在 NLP 任务中，每条文本的长度不同：
-    # "好" → [23] # 长度 1 "很好用" → [45, 67, 89] # 长度 3 "这个商品不错" → [12, 34, 56, 78, 90] # 长度 5
-    # 但 PyTorch 要求批次数据必须是规整的张量，所以需要将短句填充到相同长度。
-    def collate_fn(batch):
-        # 初始化两个空列表，分别用于收集标签和填充后的文本。
-        labels, texts = [], []
-        # 找出当前批次中最长的序列长度
-        max_len = max(len(text_ids) for _, text_ids in batch)
-        
-        for _label, _text_ids in batch:
-            labels.append(_label)
-            # 填充到相同长度
-            padded = _text_ids + [1] * (max_len - len(_text_ids))  # 1 是 <pad>
-            texts.append(padded)
-        
-        # 循环结束后的结果
-        # labels = [1, 0, 1] texts = [ [23, 45, 67, 1], # 原长3，填充1个 [12, 34, 1, 1], # 原长2，填充2个 [56, 78, 90, 11] # 原长4，无需填充 ]
-        
-        # 将标签列表转为 PyTorch 张量。
-        # dtype为64位整数，CrossEntropyLoss 要求标签为此类型
-        labels = torch.tensor(labels, dtype=torch.long)
-        
-        # 将文本列表转为二维张量。
-        texts = torch.tensor(texts, dtype=torch.long)
-        return labels, texts  # [batch], [batch, max_len]
+# 将一个批次（batch）的样本整理成模型可以接受的张量格式。
+# 在 NLP 任务中，每条文本的长度不同：
+# "好" → [23] # 长度 1 "很好用" → [45, 67, 89] # 长度 3 "这个商品不错" → [12, 34, 56, 78, 90] # 长度 5
+# 但 PyTorch 要求批次数据必须是规整的张量，所以需要将短句填充到相同长度。
+def collate_fn(batch):
+    # 初始化两个空列表，分别用于收集标签和填充后的文本。
+    labels, texts = [], []
+    # 找出当前批次中最长的序列长度
+    max_len = max(len(text_ids) for _, text_ids in batch)
+    
+    for _label, _text_ids in batch:
+        labels.append(_label)
+        # 填充到相同长度
+        padded = _text_ids + [1] * (max_len - len(_text_ids))  # 1 是 <pad>
+        texts.append(padded)
+    
+    # 循环结束后的结果
+    # labels = [1, 0, 1] texts = [ [23, 45, 67, 1], # 原长3，填充1个 [12, 34, 1, 1], # 原长2，填充2个 [56, 78, 90, 11] # 原长4，无需填充 ]
+    
+    # 将标签列表转为 PyTorch 张量。
+    # dtype为64位整数，CrossEntropyLoss 要求标签为此类型
+    labels = torch.tensor(labels, dtype=torch.long)
+
+    # 将文本列表转为二维张量。
+    texts = torch.tensor(texts, dtype=torch.long)
+    return labels, texts  # [batch], [batch, max_len]
 
 
         
@@ -84,10 +84,54 @@ if __name__ == "__main__":
     print("词表已保存至 vocab.pkl")
 
     # 3. 训练模型
+    # 3.1 准备训练环境
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # 初始化数据集和加载器
+    train_ds = SimpleDataset(raw_train_data, vocab)
+    # batch_size=8 意味着模型每次看 8 句话就更新一次规律
+    train_loader = DataLoader(train_ds, batch_size=8, shuffle=True, collate_fn=collate_fn)
+    # 初始化模型
     model = ChineseClassifier(len(vocab)).to(device)
-    # ... [此处运行训练循环代码] ...
-    
-    # 4. 保存模型权重
+    # 定义损失函数（计算预测值和真实值的差距）
+    criterion = nn.CrossEntropyLoss()
+    # 定义优化器（根据差距来调整模型参数，Adam 是目前最常用的）
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    # ---------------------------------------------------------
+    # D. 正式开始训练循环 (这就是你问的那部分)
+    # ---------------------------------------------------------
+    epochs = 20  # 整个数据集跑 20 遍
+    print(f"开始在 {device} 上训练...")
+
+    model.train() # 告诉模型：现在是训练模式
+    for epoch in range(epochs):
+        total_loss = 0
+        for label, text in train_loader:
+            # 1. 把数据移到 GPU 或 CPU
+            label, text = label.to(device), text.to(device)
+            # 2. 清空之前的梯度（必须做，否则误差会累积）
+            optimizer.zero_grad()
+            
+            # 3. 前向传播：模型给出预测结果
+            output = model(text)
+            
+            # 4. 计算误差：预测的对不对？差了多少？
+            loss = criterion(output, label)
+            
+            # 5. 反向传播：把误差传回给每个神经元
+            loss.backward()
+            
+            # 6. 更新参数：根据误差微调权重
+            optimizer.step()
+            
+            total_loss += loss.item()
+        
+        # 每隔几个 Epoch 打印一下进度
+        if (epoch + 1) % 5 == 0:
+            avg_loss = total_loss / len(train_loader)
+            print(f"Epoch [{epoch+1}/{epochs}], Loss: {avg_loss:.4f}")
+
+    # ---------------------------------------------------------
+    # E. 保存模型权重 (训练完后的收尾)
+    # ---------------------------------------------------------
     torch.save(model.state_dict(), 'chinese_model.pth')
-    print("模型权重已保存至 chinese_model.pth")
+    print("训练结束，模型已成功保存为 chinese_model.pth")
