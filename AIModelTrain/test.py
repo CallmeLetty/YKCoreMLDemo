@@ -24,12 +24,18 @@ def predict(text, vocab, model, device):
         tokens = list(jieba.cut(text))
         ids = [vocab.stoi.get(word, 0) for word in tokens]
         
-        ids_tensor = torch.tensor(ids, dtype=torch.int64).to(device)
-        offsets = torch.tensor([0]).to(device)
+        # 转换为张量，添加 batch 维度 [1, seq_len]
+        ids_tensor = torch.tensor([ids], dtype=torch.int64).to(device)
         
-        output = model(ids_tensor, offsets)
-        prob = torch.sigmoid(output).item()
-        return "正面 😄" if prob > 0.5 else "负面 😡", prob
+        # 模型输出 [1, num_class]
+        output = model(ids_tensor)
+        
+        # 使用 softmax 获取概率分布
+        probs = torch.softmax(output, dim=1)
+        pred_class = torch.argmax(probs, dim=1).item()
+        confidence = probs[0][pred_class].item()
+        
+        return "正面 😄" if pred_class == 1 else "负面 😡", confidence
 
 if __name__ == "__main__":
     vocab, model, device = load_resources()
