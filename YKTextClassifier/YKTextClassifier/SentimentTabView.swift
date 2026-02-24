@@ -38,7 +38,7 @@ struct SentimentTabView: View {
     @State private var currentEmoji: String = ""
     @State private var emojiScale: CGFloat = 0.5
 
-    private let predictor = SentimentPredictor()
+    private let predictor = PyPredictor()
 
     /// 当前选中的 Tab 对应的结果文案
     private var displayedResult: String {
@@ -161,10 +161,10 @@ struct SentimentTabView: View {
         }
     }
 
-    private func storeResultAndTriggerEmoji(_ result: String) {
+    private func storeResultAndTriggerEmoji(_ result: String, score: Double) {
         resultsByTab[selectedSubTab] = result
         isAnalyzing = false
-        triggerEmojiIfNeeded(result)
+        triggerEmojiIfNeeded(result, score: score)
     }
 
     // Create ML：NLModel
@@ -176,20 +176,24 @@ struct SentimentTabView: View {
         }
         let hypotheses = nlModel.predictedLabelHypotheses(for: inputText, maximumCount: 2)
         var result: String?
+        var score: Double = 0.5
         for (label, confidence) in hypotheses {
             let text = "标签: \(label), 置信度: \(confidence)"
-            if confidence > 0.56 { result = text }
+            if confidence > 0.56 {
+                result = text
+                score = confidence
+            }
         }
-        storeResultAndTriggerEmoji(result ?? "未知")
+        storeResultAndTriggerEmoji(result ?? "未知", score: score)
     }
 
     // PyTorch：SentimentPredictor
     private func analyzeWithPyTorch() {
-        let result = predictor.predict(text: inputText)
-        storeResultAndTriggerEmoji(result)
+        let (result, score) = predictor.predict(text: inputText)
+        storeResultAndTriggerEmoji(result, score: score)
     }
 
-    // 原生：NLTagger sentimentScore
+    // 原生：NLTagger sentimentScore（仅英文可靠；中文请用 Create ML / PyTorch）
     private func analyzeWithNatural() {
         let tagger = NLTagger(tagSchemes: [.sentimentScore])
         tagger.string = inputText
@@ -197,13 +201,16 @@ struct SentimentTabView: View {
         let (tag, _) = tagger.tag(at: inputText.startIndex, unit: .paragraph, scheme: .sentimentScore)
 
         let result: String
-        if let tag = tag, let score = Double(tag.rawValue) {
-            let label = naturalSentimentLabel(score: score)
-            result = "\(label) \(score)"
+        let score: Double
+        if let tag = tag, let confidence = Double(tag.rawValue) {
+            let label = naturalSentimentLabel(score: confidence)
+            result = "\(label) \(confidence)"
+            score = confidence
         } else {
             result = "中性/未知 \(0.0)"
+            score = 0
         }
-        storeResultAndTriggerEmoji(result)
+        storeResultAndTriggerEmoji(result, score: score)
     }
 
     private func naturalSentimentLabel(score: Double) -> String {
@@ -215,17 +222,25 @@ struct SentimentTabView: View {
     }
 
     /// 仅当用户开启「显示表情」时，根据结果判断正面/负面并显示跳动表情
-    private func triggerEmojiIfNeeded(_ result: String) {
+    private func triggerEmojiIfNeeded(_ result: String, score: Double) {
         guard showEmojiEnabled else { return }
         let lower = result.lowercased()
         if lower.contains("positive") || lower.contains("正面") || lower.contains("积极") || lower.contains("好评") {
-            showBouncingEmoji("😊")
+            showBouncingEmoji(pos: true, score: score)
         } else if lower.contains("negative") || lower.contains("负面") || lower.contains("消极") || lower.contains("批评") {
-            showBouncingEmoji("😡")
+            showBouncingEmoji(pos: false, score: score)
         }
     }
 
-    private func showBouncingEmoji(_ emoji: String) {
+    private func showBouncingEmoji(pos: Bool, score: Double) {
+        guard score > 0 else { return }
+        var emoji = "😐"
+        if score > 0.5 && score <= 0.75 {
+            emoji = pos ? "🙂" : "🙁"
+        } else if score > 0.75 {
+            emoji = pos ? "😍" : "😡"
+        }
+
         currentEmoji = emoji
         showEmoji = true
         emojiScale = 0.5

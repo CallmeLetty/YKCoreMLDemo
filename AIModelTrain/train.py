@@ -5,7 +5,7 @@ from collections import Counter       # 计数器（这里未直接使用，在 
 from model_def import ChineseVocab, ChineseClassifier  # 导入你之前定义的词表和模型
 import jieba                          # 中文分词
 import pickle                         # 序列化工具，用于保存词表
-import pandas as pd                   # 数据处理库，用于读取 CSV
+import pandas                         # 数据处理库，用于读取 CSV
 
 
 # ---------------------------------------------------------
@@ -54,35 +54,24 @@ def collate_fn(batch):
 
         
 if __name__ == "__main__":
-    # -------------------------------------------------------
-    # 步骤 1: 从 CSV 加载数据
-    # -------------------------------------------------------
+    # 1. 从 CSV 加载数据
     csv_path = 'data.csv'
     print(f"正在从 {csv_path} 读取数据...")
     
-    # read_csv 会自动处理表头
-    df = pd.read_csv(csv_path)
+    df = pandas.read_csv(csv_path) # 会自动处理表头
     df = df.dropna(subset=['label', 'review'])
-    # 约定：data.csv 中 0=负面 1=正面。若 diagnose_logits.py 显示「学反了」，改 True 并重新训练，且导出用 ClassifierConfig(['正面','负面'])、eval 用 effective=1-pred
-    LABEL_SWAP = False
+    # 约定：data.csv 中 0=负面 1=正面。
     df['label'] = df['label'].astype(int)
-    if LABEL_SWAP:
-        raw_train_data = [(1 - int(l), t) for l, t in zip(df['label'], df['review'])]
-    else:
-        raw_train_data = list(zip(df['label'], df['review']))
-    # 简单校验：第一条 1 应为正面、第一条 0 应为负面
-    first_1 = next((t for l, t in raw_train_data if l == 1), None)
-    first_0 = next((t for l, t in raw_train_data if l == 0), None)
+    raw_train_data = [(1 - int(l), t) for l, t in zip(df['label'], df['review'])]
     print(f"成功加载 {len(raw_train_data)} 条数据。")
-    print(f"  约定: 0=负面 1=正面 | 示例 正面(1): {str(first_1)[:40]}... | 负面(0): {str(first_0)[:40]}...")
-    # 2. 构建并保存词表 (非常重要！)
+
+    # 2. 构建并保存词表
     vocab = ChineseVocab(raw_train_data)
     with open('vocab.pkl', 'wb') as f:
         pickle.dump(vocab, f)
     print("词表已保存至 vocab.pkl")
 
-    # 3. 训练模型
-    # 3.1 准备训练环境
+    # 3 准备训练环境
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # 初始化数据集和加载器
     train_ds = SimpleDataset(raw_train_data, vocab)
@@ -94,13 +83,13 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss()
     # 定义优化器（根据差距来调整模型参数，Adam 是目前最常用的）
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    # ---------------------------------------------------------
-    # D. 正式开始训练循环 (这就是你问的那部分)
-    # ---------------------------------------------------------
+
+    # 4. 正式开始训练循环
     epochs = 20  # 整个数据集跑 20 遍
     print(f"开始在 {device} 上训练...")
 
     model.train() # 告诉模型：现在是训练模式
+
     for epoch in range(epochs):
         total_loss = 0
         for label, text in train_loader:
@@ -123,13 +112,11 @@ if __name__ == "__main__":
             
             total_loss += loss.item()
         
-        # 每隔几个 Epoch 打印一下进度
+        # 每隔几个 epoch 打印一下进度
         if (epoch + 1) % 5 == 0:
             avg_loss = total_loss / len(train_loader)
             print(f"Epoch [{epoch+1}/{epochs}], Loss: {avg_loss:.4f}")
 
-    # ---------------------------------------------------------
-    # E. 保存模型权重 (训练完后的收尾)
-    # ---------------------------------------------------------
+    # 5. 保存模型权重
     torch.save(model.state_dict(), 'chinese_model.pth')
     print("训练结束，模型已成功保存为 chinese_model.pth")

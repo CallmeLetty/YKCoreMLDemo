@@ -9,6 +9,9 @@
 在 iOS 端用同一句测试，对比 SentimentPredictor 打印的 token IDs 是否完全一致。
 """
 import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import torch
 import jieba
 import pickle

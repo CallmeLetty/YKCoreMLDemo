@@ -8,9 +8,11 @@ import CoreML
 //import NaturalLanguage
 import YKJiebaSupport
 
-class SentimentPredictor {
+class PyPredictor {
     /// 设为 true 时在控制台打印 token IDs，便于与 Python debug_pipeline.py 输出对比
-    private let debugTokenIds = false
+    private let debugTokenIds = true
+
+    private lazy var tokenizer = VocabularyManager()
 
     private let model: ChineseClassifier
     private var wordToId: [String: Int] = [:]
@@ -24,17 +26,16 @@ class SentimentPredictor {
         config.computeUnits = .cpuOnly
         // 注意：这里的 ChineseClassifier 是由 CoreML 工具根据你的 .mlmodel 自动生成的类
         model = try! ChineseClassifier(configuration: config)
-
+        tokenizer.initJieba()
         if let url = Bundle.main.url(forResource: "vocab", withExtension: "json"),
            let data = try? Data(contentsOf: url) {
             wordToId = try! JSONSerialization.jsonObject(with: data) as! [String: Int]
         }
     }
 
-    func predict(text: String) -> String {
-        // 1. 分词：建议与训练时保持一致（如果训练是用字，这里也用字）
-//        let tokens = text.map { String($0) }
-        let tokens = tokenizer(text)
+    func predict(text: String) -> (String, Double) {
+        // 1. 分词(与训练时保持一致用jieba)
+        let tokens = tokenizer.tokenize(text)
         
         // 2. 转换 ID
         var tokenIds = tokens.map { wordToId[$0] ?? unkId }
@@ -49,7 +50,7 @@ class SentimentPredictor {
         // 3. 创建输入。转换为 MLMultiArray.注意：CoreML 转换时如果选了 Int32，这里最好显式指定
         // 注意 shape必须严格遵守转换模型时定义的形状 是 [1, 50]
         guard let inputArray = try? MLMultiArray(shape: [1, maxLength as NSNumber], dataType: .int32) else {
-            return "初始化输入失败"
+            return ("初始化输入失败", 0)
         }
 
         // 4. 填充数据
@@ -68,17 +69,16 @@ class SentimentPredictor {
             let input = ChineseClassifierInput(text: inputArray)
             let output = try model.prediction(input: input)
             
-            // Core ML 的 ClassifierConfig 暴露的 classLabel_probs 实际是 logits（未做 softmax），
-            // 与 Python 端 torch.softmax(output, dim=1) 不一致，需在 iOS 端做 softmax 得到 0~1 概率
+            // Core ML 的 classLabel_probs 是 logits，classLabel 可能按类别名字典序等内部顺序与模型 dim 不一致，故不信任 classLabel
             let negLogit = output.classLabel_probs["负面"] ?? 0.0
             let posLogit = output.classLabel_probs["正面"] ?? 0.0
             let (negProb, posProb) = softmax(neg: negLogit, pos: posLogit)
-            
-            let label = output.classLabel
-            let confidence = label == "负面" ? negProb : posProb
-            return "预测结果: \(label)，置信度 \(String(format: "%.4f", confidence))"
+            // 根据概率自行判定标签，与 Python argmax(softmax(logits)) 一致
+            let label = posProb >= negProb ? "正面" : "负面"
+            let confidence = label == "正面" ? posProb : negProb
+            return ( "预测结果: \(label)，置信度 \(String(format: "%.4f", confidence))", confidence)
         } catch {
-            return "预测出错: \(error.localizedDescription)"
+            return ("预测出错: \(error.localizedDescription)", 0)
         }
     }
 
@@ -90,24 +90,4 @@ class SentimentPredictor {
         let sum = eNeg + ePos
         return (eNeg / sum, ePos / sum)
     }
-
-    func tokenizer(_ text: String) -> [String] {
-        return JiebaBridge.shared().cut(text, useHMM: true)
-    }
-//    func tokenizer(_ text: String) -> [String] {
-//        let tokenizer = NLTokenizer(unit: .word)
-//        tokenizer.string = text
-//        
-//        var words: [String] = []
-//        
-//        tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { tokenRange, _ in
-//            words.append(String(text[tokenRange]))
-//            return true
-//        }
-//        
-//        return words
-//    }
-    
-    
-
 }

@@ -2,6 +2,10 @@
 诊断：对 data.csv 中第一条正面(1)、第一条负面(0) 跑模型，打印原始 logits。
 用于确认模型输出维度与标签是否一致：期望 正面→logit[1]>logit[0]，负面→logit[0]>logit[1]。
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import torch
 import pandas as pd
 import jieba

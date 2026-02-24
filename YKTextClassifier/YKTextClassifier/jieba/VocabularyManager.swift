@@ -18,19 +18,10 @@ class VocabularyManager {
         }
         
         print("[VocabularyManager] 开始初始化 Jieba...")
-        // 建议在后台线程初始化
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             JiebaBridge.shared().setup()
             self?.isInitialized = true
             print("[VocabularyManager] Jieba 初始化完成")
-            
-            // 测试分词
-            let testResult = JiebaBridge.shared().cut("测试", useHMM: true)
-            if testResult.isEmpty {
-                print("[VocabularyManager] ⚠️ 警告: 测试分词返回空结果，请检查字典文件")
-            } else {
-                print("[VocabularyManager] ✅ 测试分词成功: \(testResult)")
-            }
         }
     }
     
