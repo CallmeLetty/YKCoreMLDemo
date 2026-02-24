@@ -85,7 +85,7 @@ class CommentClassifier {
 }
 
 // 第二个Tab - 评论分类
-struct SecondTabView: View {
+struct CommentsListView: View {
     @State private var comments: [Comment] = []
     @State private var isLoading = false
     @State private var selectedCategory: CommentCategory? = nil
@@ -296,5 +296,5 @@ struct CommentRow: View {
 }
 
 #Preview {
-    SecondTabView()
+    CommentsListView()
 }

@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import YKJiebaSupport
 
 @main
 struct TextClassifierApp: App {
@@ -19,19 +20,16 @@ struct TextClassifierApp: App {
 struct MainTabView: View {
     var body: some View {
         TabView {
-            FirstTabView()
+            // Tab 1: 文本感情分类（内含顶部三个子 Tab）
+            SentimentTabView()
                 .tabItem {
-                    Label("文本分类", systemImage: "doc.text.magnifyingglass")
+                    Label("文本感情分类", systemImage: "doc.text.magnifyingglass")
                 }
 
-            SecondTabView()
+            // Tab 2: 评论分类
+            CommentsListView()
                 .tabItem {
-                    Label("历史记录", systemImage: "clock.arrow.circlepath")
-                }
-
-            PyContentView()
-                .tabItem {
-                    Label("设置", systemImage: "gearshape")
+                    Label("评论分类", systemImage: "bubble.left.and.bubble.right")
                 }
         }
     }

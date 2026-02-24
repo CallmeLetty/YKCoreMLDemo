@@ -40,15 +40,16 @@ traced_model = torch.jit.trace(model_coreml, dummy_input)
 #print("转换成功！")
 #
 
-# 定义标签映射
-# 这里的顺序必须和你训练时分类的顺序一致 (0: 负面, 1: 正面)
+# 与训练约定一致：模型输出 dim0=负面 dim1=正面（data.csv 中 0=负面 1=正面）
 classifier_config = ct.ClassifierConfig(['负面', '正面'])
 
+# 使用 float32 计算精度，与 Python 训练时一致，避免 Core ML 默认 float16 导致输出与 Python 不同
 mlmodel = ct.convert(
     traced_model,
     inputs=[ct.TensorType(name="text", shape=dummy_input.shape, dtype=int)],
-    classifier_config=classifier_config, # 加上这一行
-    convert_to="mlprogram"
+    classifier_config=classifier_config,
+    convert_to="mlprogram",
+    compute_precision=ct.precision.FLOAT32,
 )
 
 mlmodel.save("ChineseClassifier.mlpackage")

@@ -31,32 +31,25 @@ class SimpleDataset(Dataset):
         label, text = self.data[idx]           # 获取第 idx 条数据
         return label, self.vocab.encode(text)  # 返回标签和编码后的索引列表
     
+# 固定序列长度，必须与推理端（Core ML / iOS）一致，否则训练时按 batch 内最大长度、推理时按 50，会导致结果不符
+MAX_LEN = 50
+PAD_ID = 1  # <pad>
+
 # 将一个批次（batch）的样本整理成模型可以接受的张量格式。
-# 在 NLP 任务中，每条文本的长度不同：
-# "好" → [23] # 长度 1 "很好用" → [45, 67, 89] # 长度 3 "这个商品不错" → [12, 34, 56, 78, 90] # 长度 5
-# 但 PyTorch 要求批次数据必须是规整的张量，所以需要将短句填充到相同长度。
 def collate_fn(batch):
-    # 初始化两个空列表，分别用于收集标签和填充后的文本。
     labels, texts = [], []
-    # 找出当前批次中最长的序列长度
-    max_len = max(len(text_ids) for _, text_ids in batch)
-    
     for _label, _text_ids in batch:
         labels.append(_label)
-        # 填充到相同长度
-        padded = _text_ids + [1] * (max_len - len(_text_ids))  # 1 是 <pad>
+        # 截断或填充到固定长度 MAX_LEN（与推理一致）
+        if len(_text_ids) < MAX_LEN:
+            padded = _text_ids + [PAD_ID] * (MAX_LEN - len(_text_ids))
+        else:
+            padded = _text_ids[:MAX_LEN]
         texts.append(padded)
-    
-    # 循环结束后的结果
-    # labels = [1, 0, 1] texts = [ [23, 45, 67, 1], # 原长3，填充1个 [12, 34, 1, 1], # 原长2，填充2个 [56, 78, 90, 11] # 原长4，无需填充 ]
-    
-    # 将标签列表转为 PyTorch 张量。
-    # dtype为64位整数，CrossEntropyLoss 要求标签为此类型
-    labels = torch.tensor(labels, dtype=torch.long)
 
-    # 将文本列表转为二维张量。
+    labels = torch.tensor(labels, dtype=torch.long)
     texts = torch.tensor(texts, dtype=torch.long)
-    return labels, texts  # [batch], [batch, max_len]
+    return labels, texts  # [batch], [batch, MAX_LEN]
 
 
         
@@ -69,14 +62,19 @@ if __name__ == "__main__":
     
     # read_csv 会自动处理表头
     df = pd.read_csv(csv_path)
-    
-    # 检查 CSV 是否有空行，并清理掉
     df = df.dropna(subset=['label', 'review'])
-    
-    # 把 DataFrame 转换为之前的 list of tuples 格式: [(1, "很好"), (0, "差"), ...]
-    raw_train_data = list(zip(df['label'], df['review']))
-    
+    # 约定：data.csv 中 0=负面 1=正面。若 diagnose_logits.py 显示「学反了」，改 True 并重新训练，且导出用 ClassifierConfig(['正面','负面'])、eval 用 effective=1-pred
+    LABEL_SWAP = False
+    df['label'] = df['label'].astype(int)
+    if LABEL_SWAP:
+        raw_train_data = [(1 - int(l), t) for l, t in zip(df['label'], df['review'])]
+    else:
+        raw_train_data = list(zip(df['label'], df['review']))
+    # 简单校验：第一条 1 应为正面、第一条 0 应为负面
+    first_1 = next((t for l, t in raw_train_data if l == 1), None)
+    first_0 = next((t for l, t in raw_train_data if l == 0), None)
     print(f"成功加载 {len(raw_train_data)} 条数据。")
+    print(f"  约定: 0=负面 1=正面 | 示例 正面(1): {str(first_1)[:40]}... | 负面(0): {str(first_0)[:40]}...")
     # 2. 构建并保存词表 (非常重要！)
     vocab = ChineseVocab(raw_train_data)
     with open('vocab.pkl', 'wb') as f:
