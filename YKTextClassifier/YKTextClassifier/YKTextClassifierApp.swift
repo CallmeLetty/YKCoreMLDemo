@@ -32,6 +32,12 @@ struct MainTabView: View {
                 .tabItem {
                     Label("评论分类", systemImage: "bubble.left.and.bubble.right")
                 }
+            
+            // Tab 3: 情感曲线图
+            CurveTabView()
+                .tabItem {
+                    Label("情感曲线图", systemImage: "chart.line.uptrend.xyaxis")
+                }
         }
     }
 }
