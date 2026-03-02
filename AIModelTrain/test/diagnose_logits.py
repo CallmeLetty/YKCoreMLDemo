@@ -29,7 +29,7 @@ def run_one(text, vocab, model, device):
     return logits[0].tolist()
 
 def main():
-    df = pd.read_csv("data.csv").dropna(subset=["label", "review"])
+    df = pd.read_csv("data.csv").dropna(subset=["label", "text"])
     df["label"] = df["label"].astype(int)
     device = torch.device("cpu")
     with open("vocab.pkl", "rb") as f:
@@ -41,17 +41,17 @@ def main():
     pos_row = df[df["label"] == 1].iloc[0]
     neg_row = df[df["label"] == 0].iloc[0]
 
-    pos_logits = run_one(pos_row["review"], vocab, model, device)
-    neg_logits = run_one(neg_row["review"], vocab, model, device)
+    pos_logits = run_one(pos_row["text"], vocab, model, device)
+    neg_logits = run_one(neg_row["text"], vocab, model, device)
 
     print("=" * 60)
     print("诊断：模型原始 logits（dim0=负面, dim1=正面）")
     print("=" * 60)
-    print(f"正面样本(1): {pos_row['review'][:50]}...")
+    print(f"正面样本(1): {pos_row['text'][:50]}...")
     print(f"  logits: [负面(dim0), 正面(dim1)] = {pos_logits}")
     print(f"  argmax={pos_logits.index(max(pos_logits))} (期望=1 才正确)")
     print()
-    print(f"负面样本(0): {neg_row['review'][:50]}...")
+    print(f"负面样本(0): {neg_row['text'][:50]}...")
     print(f"  logits: [负面(dim0), 正面(dim1)] = {neg_logits}")
     print(f"  argmax={neg_logits.index(max(neg_logits))} (期望=0 才正确)")
     print("=" * 60)

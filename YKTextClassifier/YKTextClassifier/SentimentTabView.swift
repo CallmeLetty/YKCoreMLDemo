@@ -5,29 +5,27 @@
 //  文本感情分类：单一 View，通过顶部 Tab 切换 Create ML / PyTorch / 原生 三种解析方式，保留 showEmoji。
 //
 
-import CoreML
-import NaturalLanguage
 import SwiftUI
 
-enum SentimentSubTab: String, CaseIterable {
-    case createML = "Create ML"
+enum TextClassifierType: String, CaseIterable {
+    case createML = "CreateML"
     case pytorch = "PyTorch"
-    case natural = "原生"
+    case natural = "NaturalLanguage"
 
     var title: String { rawValue }
 }
 
 struct SentimentTabView: View {
     // 共用 UI 状态
-    @State private var selectedSubTab: SentimentSubTab = .createML
+    @State private var selectedSubTab: TextClassifierType = .createML
     @State private var inputText: String = ""
     @State private var isAnalyzing: Bool = false
 
     // 各 Tab 对应解析结果，未分析过则展示「等待分析」
-    @State private var resultsByTab: [SentimentSubTab: String] = [:]
+    @State private var resultsByTab: [TextClassifierType: String] = [:]
 
     // Create ML
-    @State private var nlModel: NLModel?
+    @State private var predictor = YKPredictor()
     @State private var debounceTask: Task<Void, Never>?
 
     // 实时分析开关
@@ -38,8 +36,7 @@ struct SentimentTabView: View {
     @State private var currentEmoji: String = ""
     @State private var emojiScale: CGFloat = 0.5
 
-    private let predictor = PyPredictor()
-
+    
     /// 当前选中的 Tab 对应的结果文案
     private var displayedResult: String {
         resultsByTab[selectedSubTab] ?? "等待分析"
@@ -51,7 +48,7 @@ struct SentimentTabView: View {
                 VStack(spacing: 20) {
                     // 顶部分段：切换解析方式
                     Picker("", selection: $selectedSubTab) {
-                        ForEach(SentimentSubTab.allCases, id: \.self) { tab in
+                        ForEach(TextClassifierType.allCases, id: \.self) { tab in
                             Text(tab.title).tag(tab)
                         }
                     }
@@ -73,7 +70,9 @@ struct SentimentTabView: View {
                                 debounceTask?.cancel()
                                 debounceTask = Task {
                                     try? await Task.sleep(nanoseconds: 500_000_000)
-                                    if !Task.isCancelled { analyzeText() }
+                                    if !Task.isCancelled {
+                                        analyzeText()
+                                    }
                                 }
                             }
                         }
@@ -126,7 +125,7 @@ struct SentimentTabView: View {
                     Spacer()
                 }
                 .padding()
-                .onAppear { loadCreateMLModelIfNeeded() }
+                .onAppear { predictor.loadCreateMLModelIfNeeded() }
 
                 // 跳动表情层（三种方式得到正面/负面时都可触发）
                 if showEmoji {
@@ -139,26 +138,16 @@ struct SentimentTabView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
     }
-
-    private func loadCreateMLModelIfNeeded() {
-        guard nlModel == nil,
-              let modelURL = Bundle.main.url(forResource: "YKTextClassifier", withExtension: "mlmodelc") else { return }
-        nlModel = try? NLModel(contentsOf: modelURL)
-    }
-
+    
     @MainActor
     private func analyzeText() {
-        guard !inputText.isEmpty else { return }
         isAnalyzing = true
-
-        switch selectedSubTab {
-        case .createML:
-            analyzeWithCreateML()
-        case .pytorch:
-            analyzeWithPyTorch()
-        case .natural:
-            analyzeWithNatural()
+        guard let result = predictor.analyzeText(inputText, selectedSubTab) else {
+            isAnalyzing = false
+            return
         }
+        
+        storeResultAndTriggerEmoji(result.desc, score: result.confidence)
     }
 
     private func storeResultAndTriggerEmoji(_ result: String, score: Double) {
@@ -167,59 +156,6 @@ struct SentimentTabView: View {
         triggerEmojiIfNeeded(result, score: score)
     }
 
-    // Create ML：NLModel
-    private func analyzeWithCreateML() {
-        guard let nlModel else {
-            resultsByTab[selectedSubTab] = "Create ML 模型未加载"
-            isAnalyzing = false
-            return
-        }
-        let hypotheses = nlModel.predictedLabelHypotheses(for: inputText, maximumCount: 2)
-        var result: String?
-        var score: Double = 0.5
-        for (label, confidence) in hypotheses {
-            let text = "标签: \(label), 置信度: \(confidence)"
-            if confidence > 0.56 {
-                result = text
-                score = confidence
-            }
-        }
-        storeResultAndTriggerEmoji(result ?? "未知", score: score)
-    }
-
-    // PyTorch：SentimentPredictor
-    private func analyzeWithPyTorch() {
-        let (result, score) = predictor.predict(text: inputText)
-        storeResultAndTriggerEmoji(result, score: score)
-    }
-
-    // 原生：NLTagger sentimentScore（仅英文可靠；中文请用 Create ML / PyTorch）
-    private func analyzeWithNatural() {
-        let tagger = NLTagger(tagSchemes: [.sentimentScore])
-        tagger.string = inputText
-        tagger.setLanguage(.simplifiedChinese, range: inputText.startIndex..<inputText.endIndex)
-        let (tag, _) = tagger.tag(at: inputText.startIndex, unit: .paragraph, scheme: .sentimentScore)
-
-        let result: String
-        let score: Double
-        if let tag = tag, let confidence = Double(tag.rawValue) {
-            let label = naturalSentimentLabel(score: confidence)
-            result = "\(label) \(confidence)"
-            score = confidence
-        } else {
-            result = "中性/未知 \(0.0)"
-            score = 0
-        }
-        storeResultAndTriggerEmoji(result, score: score)
-    }
-
-    private func naturalSentimentLabel(score: Double) -> String {
-        if score > 0.5 { return "非常积极 😍" }
-        if score > 0.1 { return "积极 🙂" }
-        if score < -0.5 { return "非常消极 😡" }
-        if score < -0.1 { return "消极 🙁" }
-        return "中性 😐"
-    }
 
     /// 仅当用户开启「显示表情」时，根据结果判断正面/负面并显示跳动表情
     private func triggerEmojiIfNeeded(_ result: String, score: Double) {

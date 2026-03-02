@@ -62,7 +62,7 @@ class CommentClassifier {
     private var nlModel: NLModel?
     
     init?() {
-        guard let modelURL = Bundle.main.url(forResource: "YKTextClassifier", withExtension: "mlmodelc"),
+        guard let modelURL = Bundle.main.url(forResource: "MLTextClassifier", withExtension: "mlmodelc"),
               let nlModel = try? NLModel(contentsOf: modelURL) else {
             return nil
         }

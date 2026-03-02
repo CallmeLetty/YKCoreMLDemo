@@ -8,13 +8,20 @@ import CoreML
 //import NaturalLanguage
 import YKJiebaSupport
 
+struct PyError: Error {
+    var desc: String
+    init(desc: String) {
+        self.desc = desc
+    }
+}
+
 class PyPredictor {
     /// 设为 true 时在控制台打印 token IDs，便于与 Python debug_pipeline.py 输出对比
     private let debugTokenIds = true
 
     private lazy var tokenizer = VocabularyManager()
 
-    private let model: ChineseClassifier
+    private let model: PyTextClassifier
     private var wordToId: [String: Int] = [:]
     private let maxLength = 50
     private let padId = 1  // 必须与 Python 中的 [1] * ... 一致
@@ -25,7 +32,7 @@ class PyPredictor {
         // 强制使用 CPU 推理，与 Python float32 数值一致（避免 Neural Engine/GPU 的精度差异）
         config.computeUnits = .cpuOnly
         // 注意：这里的 ChineseClassifier 是由 CoreML 工具根据你的 .mlmodel 自动生成的类
-        model = try! ChineseClassifier(configuration: config)
+        model = try! PyTextClassifier(configuration: config)
         tokenizer.initJieba()
         if let url = Bundle.main.url(forResource: "vocab", withExtension: "json"),
            let data = try? Data(contentsOf: url) {
@@ -33,7 +40,7 @@ class PyPredictor {
         }
     }
 
-    func predict(text: String) -> (String, Double) {
+    func predict(text: String) throws -> (YKClassifierType, Double) {
         // 1. 分词(与训练时保持一致用jieba)
         let tokens = tokenizer.tokenize(text)
         
@@ -50,7 +57,7 @@ class PyPredictor {
         // 3. 创建输入。转换为 MLMultiArray.注意：CoreML 转换时如果选了 Int32，这里最好显式指定
         // 注意 shape必须严格遵守转换模型时定义的形状 是 [1, 50]
         guard let inputArray = try? MLMultiArray(shape: [1, maxLength as NSNumber], dataType: .int32) else {
-            return ("初始化输入失败", 0)
+            throw PyError(desc: "初始化输入失败")
         }
 
         // 4. 填充数据
@@ -66,7 +73,7 @@ class PyPredictor {
 
         do {
             // 这里 text 必须和转换脚本里的 ct.TensorType(name="text", ...) 名字一致
-            let input = ChineseClassifierInput(text: inputArray)
+            let input = PyTextClassifierInput(text: inputArray)
             let output = try model.prediction(input: input)
             
             // Core ML 的 classLabel_probs 是 logits，classLabel 可能按类别名字典序等内部顺序与模型 dim 不一致，故不信任 classLabel
@@ -74,11 +81,11 @@ class PyPredictor {
             let posLogit = output.classLabel_probs["正面"] ?? 0.0
             let (negProb, posProb) = softmax(neg: negLogit, pos: posLogit)
             // 根据概率自行判定标签，与 Python argmax(softmax(logits)) 一致
-            let label = posProb >= negProb ? "正面" : "负面"
-            let confidence = label == "正面" ? posProb : negProb
-            return ( "预测结果: \(label)，置信度 \(String(format: "%.4f", confidence))", confidence)
+            let label: YKClassifierType = posProb >= negProb ? .positive : .negative
+            let confidence = label == .positive ? posProb : negProb
+            return (label, confidence)
         } catch {
-            return ("预测出错: \(error.localizedDescription)", 0)
+            throw PyError(desc: "预测出错: \(error.localizedDescription)")
         }
     }
 

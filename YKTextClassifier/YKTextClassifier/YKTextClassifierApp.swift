@@ -7,6 +7,7 @@
 
 import SwiftUI
 import YKJiebaSupport
+import FoundationModels
 
 @main
 struct TextClassifierApp: App {

@@ -59,10 +59,10 @@ if __name__ == "__main__":
     print(f"正在从 {csv_path} 读取数据...")
     
     df = pandas.read_csv(csv_path) # 会自动处理表头
-    df = df.dropna(subset=['label', 'review'])
-    # 约定：data.csv 中 0=负面 1=正面。
-    df['label'] = df['label'].astype(int)
-    raw_train_data = [(1 - int(l), t) for l, t in zip(df['label'], df['review'])]
+    df = df.dropna(subset=['label', 'text'])
+    # 约定：data.csv 中 negative=负面 positive=正面。
+    df['label'] = df['label'].astype(string)
+    raw_train_data = [(1 - int(l), t) for l, t in zip(df['label'], df['text'])]
     print(f"成功加载 {len(raw_train_data)} 条数据。")
 
     # 2. 构建并保存词表
