@@ -49,11 +49,14 @@ struct Comment: Identifiable {
     let author: String
     let date: Date
     var category: CommentCategory?
+    /// 评论对应的节目时间点（秒），用于情感曲线图按时间段统计
+    var timestampInEpisode: TimeInterval?
 
-    init(content: String, author: String, date: Date = Date()) {
+    init(content: String, author: String, date: Date = Date(), timestampInEpisode: TimeInterval? = nil) {
         self.content = content
         self.author = author
         self.date = date
+        self.timestampInEpisode = timestampInEpisode
     }
 }
 
