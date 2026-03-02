@@ -72,23 +72,33 @@ class YKPredictor {
         return result
     }
     
-    // PyTorch：SentimentPredictor
+    // PyTorch：PyPredictor
     private func analyzeWithPyTorch(_ inputText: String) -> YKClassifierResult {
         do {
-            let (result, score) = try predictor.predict(text: inputText)
-            let desc = "标签: \(result)\n置信度: \(String(format: "%.2f", score))"
-            return .init(resultType: result, confidence: score, desc: desc)
+            let (resultType, score) = try predictor.predict(text: inputText)
+            let desc = "标签: \(resultType.rawValue)\n置信度: \(String(format: "%.2f", score))"
+            return .init(resultType: resultType, confidence: score, desc: desc)
         } catch {
             return .init(resultType: .unknown, confidence: 0, desc: (error as? PyError)?.desc ?? "解析失败")
         }
     }
 
-    // 原生：NLTagger sentimentScore（仅英文可靠；中文请用 Create ML / PyTorch）
+    // 原生：NLTagger sentimentScore（英文可靠；中文建议用 Create ML / PyTorch）
     private func analyzeWithNatural(_ inputText: String) -> YKClassifierResult {
         let tagger = NLTagger(tagSchemes: [.sentimentScore])
         tagger.string = inputText
-        tagger.setLanguage(.simplifiedChinese, range: inputText.startIndex..<inputText.endIndex)
-        let (tag, _) = tagger.tag(at: inputText.startIndex, unit: .paragraph, scheme: .sentimentScore)
+
+        // 先检测语言，再设置 tagger：若强制用 .simplifiedChinese，英文如 "very good" 会被误判为负
+        let recognizer = NLLanguageRecognizer()
+        recognizer.processString(inputText)
+        if let dominant = recognizer.dominantLanguage {
+            tagger.setLanguage(dominant, range: inputText.startIndex..<inputText.endIndex)
+        }
+        // 若不支持当前语言的 sentiment，availableTagSchemes 可能不包含 .sentimentScore，但 tag 仍可能返回
+
+        let (tag, _) = tagger.tag(at: inputText.startIndex,
+                                  unit: .paragraph,
+                                  scheme: .sentimentScore)
 
         let desc: String
         let score: Double
@@ -98,8 +108,8 @@ class YKPredictor {
             let label = naturalSentimentLabel(score: confidence)
             desc = "标签:\(label)\n置信度:\(confidence)"
             score = confidence
-            
-            if confidence  == 0 {
+
+            if confidence == 0 {
                 type = .neutral
             } else if confidence > 0 {
                 type = .positive
@@ -107,7 +117,7 @@ class YKPredictor {
                 type = .negative
             }
         } else {
-            desc = "解析失败"
+            desc = "解析失败（可尝试用英文或改用 Create ML / PyTorch）"
             score = 0
             type = .unknown
         }

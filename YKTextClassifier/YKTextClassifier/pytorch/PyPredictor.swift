@@ -76,9 +76,9 @@ class PyPredictor {
             let input = PyTextClassifierInput(text: inputArray)
             let output = try model.prediction(input: input)
             
-            // Core ML 的 classLabel_probs 是 logits，classLabel 可能按类别名字典序等内部顺序与模型 dim 不一致，故不信任 classLabel
-            let negLogit = output.classLabel_probs["负面"] ?? 0.0
-            let posLogit = output.classLabel_probs["正面"] ?? 0.0
+            // classLabel_probs 的 key 与 convert_to_coreml.py 的 ClassifierConfig 一致：negative / positive
+            let negLogit = output.classLabel_probs["negative"] ?? 0.0
+            let posLogit = output.classLabel_probs["positive"] ?? 0.0
             let (negProb, posProb) = softmax(neg: negLogit, pos: posLogit)
             // 根据概率自行判定标签，与 Python argmax(softmax(logits)) 一致
             let label: YKClassifierType = posProb >= negProb ? .positive : .negative
