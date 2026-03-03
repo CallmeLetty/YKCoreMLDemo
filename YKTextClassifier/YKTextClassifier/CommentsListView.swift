@@ -8,6 +8,7 @@
 import NaturalLanguage
 import SwiftUI
 import CoreML
+import YKJiebaSupport
 
 // 评论分类类型
 enum CommentCategory: String, CaseIterable {
@@ -28,7 +29,7 @@ enum CommentCategory: String, CaseIterable {
     var color: Color {
         switch self {
         case .positive: return .green
-        case .negative: return .orange
+        case .negative: return .red
         case .neutral: return .blue
         }
     }
@@ -92,6 +93,8 @@ struct CommentsListView: View {
     @State private var comments: [Comment] = []
     @State private var isLoading = false
     @State private var selectedCategory: CommentCategory? = nil
+    /// 仅从「批评建议」评论中提取的关键词，用于展示本集吐槽痛点
+    @State private var painPointKeywords: [String] = []
     private var classifier = CommentClassifier()
 
     var filteredComments: [Comment] {
@@ -131,6 +134,37 @@ struct CommentsListView: View {
                     .padding()
                 }
                 .background(Color(.systemGroupedBackground))
+
+                // 痛点关键词：仅当存在批评建议时展示
+                if !painPointKeywords.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                            Text("本集被吐槽最多")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
+                        }
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(painPointKeywords, id: \.self) { word in
+                                    Text(word)
+                                        .font(.caption)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(Color.orange.opacity(0.15))
+                                        .foregroundColor(.orange)
+                                        .cornerRadius(8)
+                                }
+                            }
+                            .padding(.horizontal, 4)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal)
+                    .background(Color(.systemBackground))
+                }
 
                 // 评论列表
                 if comments.isEmpty {
@@ -214,6 +248,19 @@ struct CommentsListView: View {
                 var classified = comment
                 classified.category = self.classifier?.classify(comment.content) ?? .neutral
                 return classified
+            }
+
+            // 从「批评建议」评论中提取痛点关键词
+            let negativeTexts = self.comments
+                .filter { $0.category == .negative }
+                .map { $0.content }
+            if !negativeTexts.isEmpty {
+                let combined = negativeTexts.joined(separator: " ")
+                JiebaBridge.shared().setup()
+                let keywords = JiebaBridge.shared().extractKeywords(combined, topN: 10)
+                self.painPointKeywords = keywords.filter { $0.count >= 2 } // 过滤单字
+            } else {
+                self.painPointKeywords = []
             }
 
             isLoading = false

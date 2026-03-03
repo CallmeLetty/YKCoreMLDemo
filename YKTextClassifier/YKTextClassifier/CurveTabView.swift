@@ -37,13 +37,13 @@ struct CurveTabView: View {
     private let classifier = CommentClassifier()
     
     enum SegmentChoice: String, CaseIterable {
-        case fiveMin = "5分钟"
-        case tenMin = "10分钟"
+        case fiveMin = "10分钟"
+        case tenMin = "20分钟"
         
         var seconds: TimeInterval {
             switch self {
-            case .fiveMin: return 5 * 60
-            case .tenMin: return 10 * 60
+            case .fiveMin: return 10 * 60
+            case .tenMin: return 20 * 60
             }
         }
     }
@@ -108,22 +108,27 @@ struct CurveTabView: View {
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                 
-                // 时间段选择
-                Picker("时间段", selection: $segmentChoice) {
-                    ForEach(SegmentChoice.allCases, id: \.self) { choice in
-                        Text(choice.rawValue).tag(choice)
+                HStack(alignment: .center, spacing: 10) {
+                    Text("时间段")
+                        .font(.subheadline)
+                        .foregroundColor(.primary)
+                    // 时间段选择
+                    Picker("时间段", selection: $segmentChoice) {
+                        ForEach(SegmentChoice.allCases, id: \.self) { choice in
+                            Text(choice.rawValue).tag(choice)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: segmentChoice) { _, _ in
+                        recomputeSegments(segmentLength: segmentChoice.seconds)
                     }
                 }
-                .pickerStyle(.segmented)
-                .onChange(of: segmentChoice) { _, _ in
-                    recomputeSegments(segmentLength: segmentChoice.seconds)
-                }
                 
-                // 曲线图：三条线分别表示好评、批评、中立
+                // 曲线图：三条线分别表示好评、批评、中立（用数值 X 轴使 0:00 从最左侧开始）
                 Chart {
                     ForEach(segments) { seg in
                         LineMark(
-                            x: .value("时间", seg.label),
+                            x: .value("时间", seg.segmentIndex),
                             y: .value("数量", seg.positiveCount),
                             series: .value("情感", "好评")
                         )
@@ -132,7 +137,7 @@ struct CurveTabView: View {
                         .symbol(Circle())
                         
                         LineMark(
-                            x: .value("时间", seg.label),
+                            x: .value("时间", seg.segmentIndex),
                             y: .value("数量", seg.negativeCount),
                             series: .value("情感", "批评建议")
                         )
@@ -141,13 +146,24 @@ struct CurveTabView: View {
                         .symbol(Circle())
                         
                         LineMark(
-                            x: .value("时间", seg.label),
+                            x: .value("时间", seg.segmentIndex),
                             y: .value("数量", seg.neutralCount),
                             series: .value("情感", "中立讨论")
                         )
                         .foregroundStyle(CommentCategory.neutral.color)
                         .interpolationMethod(.catmullRom)
                         .symbol(Circle())
+                    }
+                }
+                .chartXScale(domain: 0 ... max(0, segments.count - 1))
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: 1)) { value in
+                        AxisGridLine()
+                        AxisValueLabel {
+                            if let i = value.as(Int.self), i >= 0, i < segments.count {
+                                Text(segments[i].label)
+                            }
+                        }
                     }
                 }
                 .chartYAxisLabel("评论数")
@@ -259,20 +275,20 @@ struct CurveTabView: View {
     private static func sampleEpisodeCommentsWithTimestamps() -> [Comment] {
         let now = Date()
         return [
-            Comment(content: "开头就很抓人，期待后面！", author: "听众A", date: now, timestampInEpisode: 60),
-            Comment(content: "主播声音好听，节奏舒服。", author: "听众B", date: now, timestampInEpisode: 180),
-            Comment(content: "这段讲得很清楚，有收获。", author: "听众C", date: now, timestampInEpisode: 420),
-            Comment(content: "这里讲得太快了，没跟上。", author: "听众D", date: now, timestampInEpisode: 14 * 60),
-            Comment(content: "15分钟这段有点水，希望后面更干货。", author: "听众E", date: now, timestampInEpisode: 15 * 60),
-            Comment(content: "刚刚那段逻辑有点乱，听懵了。", author: "听众F", date: now, timestampInEpisode: 16 * 60),
-            Comment(content: "广告插得有点突兀。", author: "听众G", date: now, timestampInEpisode: 18 * 60),
-            Comment(content: "广告之后内容又回来了，不错。", author: "听众H", date: now, timestampInEpisode: 22 * 60),
-            Comment(content: "中段开始渐入佳境。", author: "听众I", date: now, timestampInEpisode: 25 * 60),
-            Comment(content: "这个观点很有启发！", author: "听众J", date: now, timestampInEpisode: 32 * 60),
-            Comment(content: "例子举得好，容易理解。", author: "听众K", date: now, timestampInEpisode: 35 * 60),
-            Comment(content: "后面节奏又有点拖。", author: "听众L", date: now, timestampInEpisode: 48 * 60),
-            Comment(content: "结尾总结到位，整体满意。", author: "听众M", date: now, timestampInEpisode: 55 * 60),
-            Comment(content: "整期质量不错，会推荐给朋友。", author: "听众N", date: now, timestampInEpisode: 58 * 60),
+            Comment(content: "开头就很抓人，期待后面！", author: "A", date: now, timestampInEpisode: 60),
+            Comment(content: "主播声音好听，节奏舒服。", author: "B", date: now, timestampInEpisode: 180),
+            Comment(content: "这段讲得很清楚，有收获。", author: "C", date: now, timestampInEpisode: 420),
+            Comment(content: "这里讲得太快了，没跟上。", author: "D", date: now, timestampInEpisode: 14 * 60),
+            Comment(content: "15分钟这段有点水，希望后面更干货。", author: "E", date: now, timestampInEpisode: 15 * 60),
+            Comment(content: "刚刚那段逻辑有点乱，听懵了。", author: "F", date: now, timestampInEpisode: 16 * 60),
+            Comment(content: "广告插得有点突兀。", author: "G", date: now, timestampInEpisode: 18 * 60),
+            Comment(content: "广告之后内容又回来了，不错。", author: "H", date: now, timestampInEpisode: 22 * 60),
+            Comment(content: "中段开始渐入佳境。", author: "I", date: now, timestampInEpisode: 25 * 60),
+            Comment(content: "这个观点很有启发！", author: "J", date: now, timestampInEpisode: 32 * 60),
+            Comment(content: "例子举得好，容易理解。", author: "K", date: now, timestampInEpisode: 35 * 60),
+            Comment(content: "后面节奏又有点拖。", author: "L", date: now, timestampInEpisode: 48 * 60),
+            Comment(content: "结尾总结到位，整体满意。", author: "M", date: now, timestampInEpisode: 55 * 60),
+            Comment(content: "整期质量不错，会推荐给朋友。", author: "N", date: now, timestampInEpisode: 58 * 60),
         ]
     }
 }

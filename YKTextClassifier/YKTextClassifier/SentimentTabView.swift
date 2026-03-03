@@ -22,7 +22,7 @@ struct SentimentTabView: View {
     @State private var isAnalyzing: Bool = false
 
     // 各 Tab 对应解析结果，未分析过则展示「等待分析」
-    @State private var resultsByTab: [TextClassifierType: String] = [:]
+    @State private var resultsByTab: [TextClassifierType: YKClassifierResult] = [:]
 
     // Create ML
     @State private var predictor = YKPredictor()
@@ -39,7 +39,7 @@ struct SentimentTabView: View {
     
     /// 当前选中的 Tab 对应的结果文案
     private var displayedResult: String {
-        resultsByTab[selectedSubTab] ?? "等待分析"
+        resultsByTab[selectedSubTab]?.desc ?? "等待分析"
     }
 
     var body: some View {
@@ -146,26 +146,16 @@ struct SentimentTabView: View {
             isAnalyzing = false
             return
         }
-        
-        storeResultAndTriggerEmoji(result.desc, score: result.confidence)
-    }
-
-    private func storeResultAndTriggerEmoji(_ result: String, score: Double) {
         resultsByTab[selectedSubTab] = result
         isAnalyzing = false
-        triggerEmojiIfNeeded(result, score: score)
+        triggerEmojiIfNeeded(result.resultType, score: result.confidence)
     }
 
-
     /// 仅当用户开启「显示表情」时，根据结果判断正面/负面并显示跳动表情
-    private func triggerEmojiIfNeeded(_ result: String, score: Double) {
-        guard showEmojiEnabled else { return }
-        let lower = result.lowercased()
-        if lower.contains("positive") || lower.contains("正面") || lower.contains("积极") || lower.contains("好评") {
-            showBouncingEmoji(pos: true, score: score)
-        } else if lower.contains("negative") || lower.contains("负面") || lower.contains("消极") || lower.contains("批评") {
-            showBouncingEmoji(pos: false, score: score)
-        }
+    private func triggerEmojiIfNeeded(_ type: YKClassifierType, score: Double) {
+        guard showEmojiEnabled,
+        [YKClassifierType.positive, .negative].contains(type) else { return }
+        showBouncingEmoji(pos: type == .positive, score: score)
     }
 
     private func showBouncingEmoji(pos: Bool, score: Double) {

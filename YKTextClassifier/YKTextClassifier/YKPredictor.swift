@@ -101,12 +101,11 @@ class YKPredictor {
                                   scheme: .sentimentScore)
 
         let desc: String
-        let score: Double
+        var score: Double
         let type: YKClassifierType
         if let tag = tag,
             let confidence = Double(tag.rawValue) {
-            let label = naturalSentimentLabel(score: confidence)
-            desc = "标签:\(label)\n置信度:\(confidence)"
+            desc = "标签:\(confidence > 0 ? "positive" : "negative")\n置信度:\(confidence)"
             score = confidence
 
             if confidence == 0 {
@@ -115,6 +114,7 @@ class YKPredictor {
                 type = .positive
             } else {
                 type = .negative
+                score = abs(score) // 与其他方式统一分数标准
             }
         } else {
             desc = "解析失败（可尝试用英文或改用 Create ML / PyTorch）"
@@ -122,13 +122,5 @@ class YKPredictor {
             type = .unknown
         }
         return .init(resultType: type, confidence: score, desc: desc)
-    }
-
-    private func naturalSentimentLabel(score: Double) -> String {
-        if score > 0.5 { return "非常积极 😍" }
-        if score > 0.1 { return "积极 🙂" }
-        if score < -0.5 { return "非常消极 😡" }
-        if score < -0.1 { return "消极 🙁" }
-        return "中性 😐"
     }
 }
