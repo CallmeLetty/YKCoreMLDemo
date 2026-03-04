@@ -138,6 +138,23 @@ using namespace std;
     return [result copy];
 }
 
+- (NSArray<NSDictionary<NSString *, id> *> *)extractKeywordsWithWeights:(NSString *)text topN:(NSInteger)topN {
+    if (!_jieba || !text || text.length == 0 || topN <= 0) return @[];
+    
+    string sentence = [text UTF8String];
+    std::vector<std::pair<std::string, double>> kws;
+    _jieba->extractor.Extract(sentence, kws, (size_t)topN);
+    
+    NSMutableArray *result = [NSMutableArray arrayWithCapacity:kws.size()];
+    for (const auto& p : kws) {
+        [result addObject:@{
+            @"word": [NSString stringWithUTF8String:p.first.c_str()],
+            @"weight": @(p.second)
+        }];
+    }
+    return [result copy];
+}
+
 - (void)dealloc {
     if (_jieba) delete _jieba;
 }
