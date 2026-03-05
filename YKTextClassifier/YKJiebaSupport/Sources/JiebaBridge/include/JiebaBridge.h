@@ -14,6 +14,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// 提取关键词并返回权重，便于按权重排序或展示。每项为 @{ @"word": NSString, @"weight": NSNumber }。
 - (NSArray<NSDictionary<NSString *, id> *> *)extractKeywordsWithWeights:(NSString *)text topN:(NSInteger)topN;
 
+/// 基于已分好词的文档列表做 TF-IDF 关键词提取（与 cut 同源：情感分类用 cut，此处传入 cut 结果即可复用一次分词）。
+/// @param documents 每篇文档为分词后的 token 数组，如 [ ["好", "看"], ["很", "好", "看"] ]
+/// @param topN 返回前 N 个关键词
+/// @param minWordLength 忽略长度小于此值的 token，常用 2
+- (NSArray<NSString *> *)extractKeywordsTFIDFFromTokenizedDocuments:(NSArray<NSArray<NSString *> *> *)documents
+                                                              topN:(NSInteger)topN
+                                                     minWordLength:(NSInteger)minWordLength;
+
 @end
 
 NS_ASSUME_NONNULL_END

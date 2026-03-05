@@ -155,6 +155,47 @@ using namespace std;
     return [result copy];
 }
 
+- (NSArray<NSString *> *)extractKeywordsTFIDFFromTokenizedDocuments:(NSArray<NSArray<NSString *> *> *)documents
+                                                              topN:(NSInteger)topN
+                                                     minWordLength:(NSInteger)minWordLength {
+    if (!documents || documents.count == 0 || topN <= 0) return @[];
+    
+    NSInteger N = documents.count;
+    NSMutableDictionary<NSString *, NSNumber *> *tf = [NSMutableDictionary dictionary];
+    NSMutableDictionary<NSString *, NSNumber *> *df = [NSMutableDictionary dictionary];
+    
+    for (NSArray<NSString *> *tokens in documents) {
+        if (![tokens isKindOfClass:[NSArray class]] || tokens.count == 0) continue;
+        NSMutableSet<NSString *> *seenInDoc = [NSMutableSet set];
+        for (NSString *word in tokens) {
+            if (![word isKindOfClass:[NSString class]] || (NSInteger)word.length < minWordLength) continue;
+            NSString *w = [word copy];
+            tf[w] = @(tf[w].integerValue + 1);
+            [seenInDoc addObject:w];
+        }
+        for (NSString *w in seenInDoc) {
+            df[w] = @(df[w].integerValue + 1);
+        }
+    }
+    
+    NSMutableArray<NSDictionary *> *scored = [NSMutableArray arrayWithCapacity:tf.count];
+    for (NSString *word in tf) {
+        double tfVal = tf[word].doubleValue;
+        double dfVal = df[word].doubleValue + 1.0;
+        double idf = log((double)(N + 1) / dfVal);
+        [scored addObject:@{ @"word": word, @"score": @(tfVal * idf) }];
+    }
+    [scored sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
+        return [b[@"score"] compare:a[@"score"]];
+    }];
+    
+    NSMutableArray *result = [NSMutableArray arrayWithCapacity:MIN((NSUInteger)topN, scored.count)];
+    for (NSUInteger i = 0; i < (NSUInteger)topN && i < scored.count; i++) {
+        [result addObject:scored[i][@"word"]];
+    }
+    return [result copy];
+}
+
 - (void)dealloc {
     if (_jieba) delete _jieba;
 }

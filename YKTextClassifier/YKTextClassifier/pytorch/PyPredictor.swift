@@ -89,6 +89,31 @@ class PyPredictor {
         }
     }
 
+    /// 预测并返回分词结果，便于调用方复用做关键词统计（避免对同一条评论重复分词）
+    func predictWithTokens(text: String) throws -> (YKClassifierType, Double, [String]) {
+        let tokens = tokenizer.tokenize(text)
+        var tokenIds = tokens.map { wordToId[$0] ?? unkId }
+        if tokenIds.count < maxLength {
+            tokenIds.append(contentsOf: Array(repeating: padId, count: maxLength - tokenIds.count))
+        } else {
+            tokenIds = Array(tokenIds.prefix(maxLength))
+        }
+        guard let inputArray = try? MLMultiArray(shape: [1, maxLength as NSNumber], dataType: .int32) else {
+            throw PyError(desc: "初始化输入失败")
+        }
+        for (index, id) in tokenIds.enumerated() {
+            inputArray[[0, index] as [NSNumber]] = id as NSNumber
+        }
+        let input = PyTextClassifierInput(text: inputArray)
+        let output = try model.prediction(input: input)
+        let negLogit = output.classLabel_probs["negative"] ?? 0.0
+        let posLogit = output.classLabel_probs["positive"] ?? 0.0
+        let (negProb, posProb) = softmax(neg: negLogit, pos: posLogit)
+        let label: YKClassifierType = posProb >= negProb ? .positive : .negative
+        let confidence = label == .positive ? posProb : negProb
+        return (label, confidence, tokens)
+    }
+
     /// 对两类 logits 做 softmax，得到与 Python 一致的 0~1 概率（数值稳定：先减最大值再 exp）
     private func softmax(neg: Double, pos: Double) -> (Double, Double) {
         let maxL = max(neg, pos)

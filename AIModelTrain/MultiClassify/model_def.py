@@ -1,5 +1,22 @@
+import re
 import jieba
 import torch.nn as nn
+
+# 是否在分词前去掉标点（与推理端保持一致）
+STRIP_PUNCTUATION = True
+_PUNCT_PATTERN = re.compile(
+    r'[\s\u3000-\u303f\uff00-\uffef\u2000-\u206f'
+    r'!"#\$%&\'()*+,\-./:;<=>?@\[\\\]^_`\{\}|~]+'
+)
+
+
+def _normalize_text(text):
+    if not text:
+        return text
+    if STRIP_PUNCTUATION:
+        return _PUNCT_PATTERN.sub('', text)
+    return text.strip()
+
 
 # 词表定义（与 AIModelTrain 一致）
 class ChineseVocab:
@@ -11,7 +28,9 @@ class ChineseVocab:
             from collections import Counter
             counter = Counter()
             for _, text in data:
-                counter.update(list(jieba.cut(text)))
+                t = _normalize_text(text)
+                if t:
+                    counter.update(list(jieba.cut(t)))
             idx = 2
             for word, freq in counter.items():
                 if freq >= min_freq:
@@ -20,7 +39,10 @@ class ChineseVocab:
                     idx += 1
 
     def encode(self, text):
-        return [self.stoi.get(word, 0) for word in list(jieba.cut(text))]
+        t = _normalize_text(text)
+        if not t:
+            return []
+        return [self.stoi.get(word, 0) for word in list(jieba.cut(t))]
 
     def __len__(self):
         return len(self.stoi)

@@ -12,9 +12,10 @@ import pandas                         # 数据处理库，用于读取 CSV
 # 2. 中文分词与词表构建
 # ---------------------------------------------------------
 def chinese_tokenizer(text):
-    # 使用 jieba 进行精确模式分词，将文本切分成词语列表
-    # 这个函数在当前代码中没有被调用，因为分词逻辑已经在 ChineseVocab.encode() 中实现了。
-    return list(jieba.cut(text))
+    # 使用 jieba 进行精确模式分词；与 model_def 一致，会先按 STRIP_PUNCTUATION 做预处理
+    from model_def import _normalize_text
+    t = _normalize_text(text) if text else ''
+    return list(jieba.cut(t)) if t else []
 
 # ---------------------------------------------------------
 # 3. 数据加载器 (Dataset & DataLoader)
@@ -60,9 +61,14 @@ if __name__ == "__main__":
     
     df = pandas.read_csv(csv_path) # 会自动处理表头
     df = df.dropna(subset=['label', 'text'])
-    # 约定：data.csv 中 negative=负面 positive=正面。
-    df['label'] = df['label'].astype(string)
-    raw_train_data = [(1 - int(l), t) for l, t in zip(df['label'], df['text'])]
+    # 约定：data.csv 中 negative=负面 positive=正面。支持字符串或数字标签
+    def label_to_int(l):
+        s = str(l).strip().lower()
+        if s in ('positive', '1'): return 0
+        if s in ('negative', '0'): return 1
+        raise ValueError(f"未知 label: {l!r}，期望 'positive'/'negative' 或 0/1")
+    df['label'] = df['label'].astype(str)
+    raw_train_data = [(label_to_int(l), t) for l, t in zip(df['label'], df['text'])]
     print(f"成功加载 {len(raw_train_data)} 条数据。")
 
     # 2. 构建并保存词表

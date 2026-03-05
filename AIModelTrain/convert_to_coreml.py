@@ -27,8 +27,9 @@ dummy_input = torch.randint(0, vocab_size, (1, sentence_length), dtype=torch.int
 # 5. 追踪模型
 traced_model = torch.jit.trace(model_coreml, dummy_input)
 
-# 与训练约定一致：模型输出 dim0=负面 dim1=正面（data.csv 中 0=负面 1=正面）
-classifier_config = ct.ClassifierConfig(['负面', '正面'])
+# 与训练约定一致：train.py 中 label 0=positive、1=negative，模型输出 dim0=正面 dim1=负面
+# 使用英文 key 以便 iOS classLabel_probs["positive"]/["negative"] 能取到值
+classifier_config = ct.ClassifierConfig(['positive', 'negative'])
 
 # 6. 转换到 Core ML
 # 使用 float32 计算精度，与 Python 训练时一致，避免 Core ML 默认 float16 导致输出与 Python 不同

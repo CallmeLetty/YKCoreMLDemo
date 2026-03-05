@@ -41,6 +41,16 @@ enum CommentCategory: String, CaseIterable {
         case .neutral: return "message.fill"
         }
     }
+
+    /// 将 PyTextClassifier 的预测结果映射为三分类（置信度低时归为中立）
+    static func fromPyPredict(label: YKClassifierType, confidence: Double, neutralThreshold: Double = 0.55) -> CommentCategory {
+        if confidence < neutralThreshold { return .neutral }
+        switch label {
+        case .positive: return .positive
+        case .negative: return .negative
+        default: return .neutral
+        }
+    }
 }
 
 // 评论数据模型
@@ -52,39 +62,15 @@ struct Comment: Identifiable {
     var category: CommentCategory?
     /// 评论对应的节目时间点（秒），用于情感曲线图按时间段统计
     var timestampInEpisode: TimeInterval?
+    /// 该条评论的分词结果（分类时得到），用于 TF-IDF 关键词提取
+    var tokens: [String]?
 
-    init(content: String, author: String, date: Date = Date(), timestampInEpisode: TimeInterval? = nil) {
+    init(content: String, author: String, date: Date = Date(), timestampInEpisode: TimeInterval? = nil, tokens: [String]? = nil) {
         self.content = content
         self.author = author
         self.date = date
         self.timestampInEpisode = timestampInEpisode
-    }
-}
-
-// 评论分类器
-class CommentClassifier {
-    private var nlModel: NLModel?
-    
-    init?() {
-        guard let modelURL = Bundle.main.url(forResource: "MLTextClassifier", withExtension: "mlmodelc"),
-              let nlModel = try? NLModel(contentsOf: modelURL) else {
-            return nil
-        }
-        
-        self.nlModel = nlModel
-    }
-
-    func classify(_ text: String) -> CommentCategory {
-        guard let hypotheses = nlModel?.predictedLabelHypotheses(for: text, maximumCount: 2) else {
-            return .neutral
-        }
-
-        for (label, confidence) in hypotheses {
-            if confidence > 0.56 {
-                return CommentCategory.init(rawValue: label) ?? .neutral
-            }
-        }
-        return .neutral
+        self.tokens = tokens
     }
 }
 
@@ -93,15 +79,59 @@ struct CommentsListView: View {
     @State private var comments: [Comment] = []
     @State private var isLoading = false
     @State private var selectedCategory: CommentCategory? = nil
-    /// 仅从「批评建议」评论中提取的关键词，用于展示本集吐槽痛点
+    /// 当前筛选条件下提取的关键词（随选中的评论分类变化）
     @State private var painPointKeywords: [String] = []
-    private var classifier = CommentClassifier()
+    private let pyPredictor = PyPredictor()
 
     var filteredComments: [Comment] {
         if let category = selectedCategory {
             return comments.filter { $0.category == category }
         }
         return comments
+    }
+
+    /// 当前关键词区块的标题（随选中分类变化）
+    private var keywordSectionTitle: String {
+        switch selectedCategory {
+        case .positive: return "好评关键词"
+        case .negative: return "批评建议关键词"
+        case .neutral: return "中立讨论关键词"
+        case .none: return "全部评论关键词"
+        }
+    }
+
+    private var keywordSectionIcon: String {
+        switch selectedCategory {
+        case .positive: return CommentCategory.positive.icon
+        case .negative: return CommentCategory.negative.icon
+        case .neutral: return CommentCategory.neutral.icon
+        case .none: return "text.magnifyingglass"
+        }
+    }
+
+    private var keywordSectionColor: Color {
+        switch selectedCategory {
+        case .positive: return CommentCategory.positive.color
+        case .negative: return CommentCategory.negative.color
+        case .neutral: return CommentCategory.neutral.color
+        case .none: return .orange
+        }
+    }
+
+    /// 关键词由 Jieba 层 TF-IDF 计算（传入分类时已得到的 tokens，与 cut 同源，只分词一次）
+    private func extractKeywordsForCurrentFilter() {
+        let documents = filteredComments.compactMap { c -> [String]? in
+            let t = (c.tokens ?? []).filter { $0.count >= 2 }
+            return t.isEmpty ? nil : t
+        }
+        if documents.isEmpty {
+            painPointKeywords = []
+            return
+        }
+        JiebaBridge.shared().setup()
+        let keywords = JiebaBridge.shared()
+            .extractKeywordsTFIDF(fromTokenizedDocuments: documents, topN: 10, minWordLength: 2)
+        painPointKeywords = keywords
     }
 
     var categoryCounts: [CommentCategory: Int] {
@@ -127,6 +157,7 @@ struct CommentsListView: View {
                             .onTapGesture {
                                 withAnimation {
                                     selectedCategory = selectedCategory == category ? nil : category
+                                    extractKeywordsForCurrentFilter()
                                 }
                             }
                         }
@@ -135,13 +166,13 @@ struct CommentsListView: View {
                 }
                 .background(Color(.systemGroupedBackground))
 
-                // 痛点关键词：仅当存在批评建议时展示
+                // 关键词：根据当前选中的评论分类提取并展示
                 if !painPointKeywords.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundColor(.orange)
-                            Text("本集被吐槽最多")
+                            Image(systemName: keywordSectionIcon)
+                                .foregroundColor(keywordSectionColor)
+                            Text(keywordSectionTitle)
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                                 .foregroundColor(.primary)
@@ -153,8 +184,8 @@ struct CommentsListView: View {
                                         .font(.caption)
                                         .padding(.horizontal, 10)
                                         .padding(.vertical, 6)
-                                        .background(Color.orange.opacity(0.15))
-                                        .foregroundColor(.orange)
+                                        .background(keywordSectionColor.opacity(0.15))
+                                        .foregroundColor(keywordSectionColor)
                                         .cornerRadius(8)
                                 }
                             }
@@ -243,25 +274,15 @@ struct CommentsListView: View {
                 Comment(content: "更新极不稳定，追更半年才出3期，诚意何在？", author: "沈七"),
             ]
             
-            // 对每条评论进行分类
+            // 使用 PyTextClassifier：每条评论只执行一次「分词 + 分类」，同时保留每条的分词用于 TF-IDF
             self.comments = sampleComments.map { comment in
                 var classified = comment
-                classified.category = self.classifier?.classify(comment.content) ?? .neutral
+                let (label, confidence, tokens) = (try? self.pyPredictor.predictWithTokens(text: comment.content)) ?? (.neutral, 0, [])
+                classified.category = CommentCategory.fromPyPredict(label: label, confidence: confidence)
+                classified.tokens = tokens
                 return classified
             }
-
-            // 从「批评建议」评论中提取痛点关键词
-            let negativeTexts = self.comments
-                .filter { $0.category == .negative }
-                .map { $0.content }
-            if !negativeTexts.isEmpty {
-                let combined = negativeTexts.joined(separator: " ")
-                JiebaBridge.shared().setup()
-                let keywords = JiebaBridge.shared().extractKeywords(combined, topN: 10)
-                self.painPointKeywords = keywords.filter { $0.count >= 2 } // 过滤单字
-            } else {
-                self.painPointKeywords = []
-            }
+            self.extractKeywordsForCurrentFilter()
 
             isLoading = false
         }

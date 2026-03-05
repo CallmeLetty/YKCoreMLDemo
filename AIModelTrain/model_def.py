@@ -1,5 +1,25 @@
+import re
 import jieba # 中文分词库，用于将中文句子切分成词语
 import torch.nn as nn # 继承 PyTorch 的 nn.Module，定义神经网络模型。
+
+# 是否在分词前去掉标点（与推理端 VocabularyManager 保持一致时，训练效果更好）
+STRIP_PUNCTUATION = True
+
+# 中文 + 英文标点、空白（用于忽略标点符号）
+_PUNCT_PATTERN = re.compile(
+    r'[\s\u3000-\u303f\uff00-\uffef\u2000-\u206f'
+    r'!"#\$%&\'()*+,\-./:;<=>?@\[\\\]^_`\{\}|~]+'
+)
+
+
+def _normalize_text(text):
+    """分词前预处理：若 STRIP_PUNCTUATION 为 True 则去掉标点与多余空白。"""
+    if not text:
+        return text
+    if STRIP_PUNCTUATION:
+        return _PUNCT_PATTERN.sub('', text)
+    return text.strip()
+
 
 # 词表定义
 class ChineseVocab:
@@ -15,7 +35,9 @@ class ChineseVocab:
             counter = Counter()
             # 遍历数据，对每条文本分词后统计词频。data 格式为 [(label, text), ...]。
             for _, text in data:
-                counter.update(list(jieba.cut(text)))
+                t = _normalize_text(text)
+                if t:
+                    counter.update(list(jieba.cut(t)))
             idx = 2 # 从索引 2 开始（0、1 已被特殊标记占用），为满足最小词频的词分配索引。
             for word, freq in counter.items():
                 if freq >= min_freq: # 只保留出现次数 ≥ min_freq 的词
@@ -25,7 +47,10 @@ class ChineseVocab:
                 
     # 将文本转为索引序列。如果词不在词表中，返回 0（即 <unk>）。
     def encode(self, text):
-        return [self.stoi.get(word, 0) for word in list(jieba.cut(text))]
+        t = _normalize_text(text)
+        if not t:
+            return []
+        return [self.stoi.get(word, 0) for word in list(jieba.cut(t))]
     
     # 返回词表大小。
     def __len__(self):

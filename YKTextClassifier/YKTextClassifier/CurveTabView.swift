@@ -34,7 +34,7 @@ struct CurveTabView: View {
     @State private var isLoading = true
     @State private var segmentChoice: SegmentChoice = .fiveMin
     
-    private let classifier = CommentClassifier()
+    private let pyPredictor = PyPredictor()
     
     enum SegmentChoice: String, CaseIterable {
         case fiveMin = "10分钟"
@@ -187,7 +187,7 @@ struct CurveTabView: View {
                             Text("建议关注")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
-                            Text("\(spike.label) 附近负面评论较多（\(spike.negativeCount) 条），可回顾该段内容是否需优化。")
+                            Text("\(Self.formatTime(spike.startSeconds))–\(Self.formatTime(spike.endSeconds)) 时段内负面评论较多（\(spike.negativeCount) 条），可回顾该段内容是否需优化。")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -221,7 +221,8 @@ struct CurveTabView: View {
             let raw = Self.sampleEpisodeCommentsWithTimestamps()
             let classified = raw.map { comment in
                 var c = comment
-                c.category = classifier?.classify(comment.content) ?? .neutral
+                let (label, confidence) = (try? self.pyPredictor.predict(text: comment.content)) ?? (.neutral, 0)
+                c.category = CommentCategory.fromPyPredict(label: label, confidence: confidence)
                 return c
             }
             self.episodeComments = classified
