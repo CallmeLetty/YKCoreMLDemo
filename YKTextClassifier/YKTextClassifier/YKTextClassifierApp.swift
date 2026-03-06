@@ -39,5 +39,21 @@ struct MainTabView: View {
                     Label("情感曲线图", systemImage: "chart.line.uptrend.xyaxis")
                 }
         }
+        .onAppear {
+             Task {
+                 do {
+                     let req = CommentListPrimaryRequest(
+                         targetId: "episode_id_xxx",
+                         order: "CREATED_AT_DESC",
+                         locatedId: nil,
+                         loadMoreKey: nil
+                     )
+                     let (comments, loadMoreKey, totalCount, notFoundToastText) = try await requestCommentListPrimary(req)
+                     print(comments.count, totalCount ?? 0)
+                 } catch {
+                     print(error)
+                 }
+             }
+        }
     }
 }
