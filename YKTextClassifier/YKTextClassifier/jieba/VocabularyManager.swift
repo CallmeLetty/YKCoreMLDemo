@@ -31,37 +31,41 @@ private func normalizeForTokenize(_ text: String) -> String {
 }
 
 class VocabularyManager {
+    // Jieba 初始化与状态读写
+    private let jiebaQueue = DispatchQueue(label: "com.yk.vocabularymanager.jieba", qos: .userInitiated)
+    // 仅在 jiebaQueue 上读写
     private var isInitialized = false
-    
+
+    /// 在 jiebaQueue 上执行：若未初始化则调用 setup 并标记完成。多线程多次调用 initJieba 时，只有第一次会真正执行 setup，其余直接返回。
     func initJieba() {
-        guard !isInitialized else {
-            print("[VocabularyManager] Jieba 已经初始化")
-            return
-        }
-        
-        print("[VocabularyManager] 开始初始化 Jieba...")
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        jiebaQueue.async { [weak self] in
+            guard let self else { return }
+            if self.isInitialized {
+                return
+            }
+            print("[VocabularyManager] 开始初始化 Jieba...")
             JiebaBridge.shared().setup()
-            self?.isInitialized = true
+            self.isInitialized = true
             print("[VocabularyManager] Jieba 初始化完成")
         }
     }
-    
+
+    /// 分词前会先在同一串行队列上等待初始化完成，再调用 cut，保证线程安全且不会在未初始化时分词。
     func tokenize(_ text: String) -> [String] {
-        if !isInitialized {
-            print("[VocabularyManager] ⚠️ 警告: Jieba 未初始化，正在初始化...")
-            // 同步初始化（不推荐，但确保能用）
-            JiebaBridge.shared().setup()
-            isInitialized = true
-        }
-        
         let normalized = normalizeForTokenize(text)
-        let result = JiebaBridge.shared().cut(normalized, useHMM: true)
-        
+        var result: [String] = []
+        jiebaQueue.sync { [weak self] in
+            guard let self else { return }
+            if !self.isInitialized {
+                print("[VocabularyManager] Jieba 尚未就绪，正在同步初始化...")
+                JiebaBridge.shared().setup()
+                self.isInitialized = true
+            }
+            result = JiebaBridge.shared().cut(normalized, useHMM: true)
+        }
         if result.isEmpty && !text.isEmpty {
             print("[VocabularyManager] ⚠️ 分词结果为空，输入: \(text)")
         }
-        
         return result
     }
 }

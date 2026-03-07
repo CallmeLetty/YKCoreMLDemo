@@ -28,6 +28,19 @@ using namespace std;
 }
 
 - (void)setup {
+    if (_jieba) {
+        return;
+    }
+    static dispatch_once_t onceToken;
+    static NSLock *setupLock = nil;
+    dispatch_once(&onceToken, ^{
+        setupLock = [[NSLock alloc] init];
+    });
+    [setupLock lock];
+    if (_jieba) {
+        [setupLock unlock];
+        return;
+    }
     // 在 Swift Package 中，资源文件会被打包到 YKJiebaSupport_JiebaBridge.bundle 中
     NSBundle *resourceBundle = nil;
     NSString *dictRoot = nil;
@@ -37,9 +50,6 @@ using namespace std;
     if (bundlePath) {
         resourceBundle = [NSBundle bundleWithPath:bundlePath];
         dictRoot = [resourceBundle pathForResource:@"dict" ofType:nil];
-        if (dictRoot) {
-            NSLog(@"[Jieba] 方法1成功: 从 YKJiebaSupport_JiebaBridge.bundle 找到字典");
-        }
     }
     
     // 方法2: 遍历所有 bundle 查找包含 dict 资源的 bundle
@@ -49,7 +59,6 @@ using namespace std;
             if (path) {
                 dictRoot = path;
                 resourceBundle = bundle;
-                NSLog(@"[Jieba] 方法2成功: 从 bundle %@ 找到字典", bundle.bundleIdentifier ?: bundle.bundlePath);
                 break;
             }
         }
@@ -58,9 +67,6 @@ using namespace std;
     // 方法3: 尝试从主 bundle 中查找
     if (!dictRoot) {
         dictRoot = [[NSBundle mainBundle] pathForResource:@"dict" ofType:nil];
-        if (dictRoot) {
-            NSLog(@"[Jieba] 方法3成功: 从主 bundle 找到字典");
-        }
     }
     
     if (!dictRoot) {
@@ -70,10 +76,11 @@ using namespace std;
         for (NSBundle *bundle in [NSBundle allBundles]) {
             NSLog(@"  - %@", bundle.bundleIdentifier ?: bundle.bundlePath);
         }
+        [setupLock unlock];
         return;
     }
     
-    NSLog(@"[Jieba] 找到字典路径: %@", dictRoot);
+//    NSLog(@"[Jieba] 找到字典路径: %@", dictRoot);
     
     string root = [dictRoot UTF8String];
     
@@ -95,6 +102,7 @@ using namespace std;
     
     if (!dictExists) {
         NSLog(@"[JiebaError] 主字典文件不存在: %s", dictPath.c_str());
+        [setupLock unlock];
         return;
     }
     
@@ -106,6 +114,7 @@ using namespace std;
     } catch (...) {
         NSLog(@"[JiebaError] 初始化崩溃，未知错误");
     }
+    [setupLock unlock];
 }
 
 - (NSArray<NSString *> *)cut:(NSString *)text useHMM:(BOOL)useHMM {
