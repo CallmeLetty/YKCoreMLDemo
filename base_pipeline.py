@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Pipeline: 训练 PyTorch 模型 → 转为 Core ML → 同步到 iOS 工程
-1. 执行 AIModelTrain/train.py
-2. 执行 AIModelTrain/convert_to_coreml.py
+1. 执行 AIModelTrain/classify_base/train.py
+2. 执行 AIModelTrain/classify_base/convert_to_coreml.py
 3. 将产物同步到 YKTextClassifier/YKTextClassifier/pytorch/
 """
 import os
@@ -12,7 +12,7 @@ import sys
 
 # 脚本所在目录即项目根目录
 ROOT = os.path.dirname(os.path.abspath(__file__))
-AIMODEL_TRAIN = os.path.join(ROOT, "AIModelTrain")
+AIMODEL_TRAIN = os.path.join(ROOT, "AIModelTrain/classify_base")
 PYTORCH_TARGET = os.path.join(ROOT, "YKTextClassifier", "YKTextClassifier", "pytorch")
 
 

@@ -92,30 +92,15 @@ struct CommentsListView: View {
 
     /// 当前关键词区块的标题（随选中分类变化）
     private var keywordSectionTitle: String {
-        switch selectedCategory {
-        case .positive: return "好评关键词"
-        case .negative: return "批评建议关键词"
-        case .neutral: return "中立讨论关键词"
-        case .none: return "全部评论关键词"
-        }
+        "\(selectedCategory?.rawValue ?? "全部评论")关键词"
     }
 
     private var keywordSectionIcon: String {
-        switch selectedCategory {
-        case .positive: return CommentCategory.positive.icon
-        case .negative: return CommentCategory.negative.icon
-        case .neutral: return CommentCategory.neutral.icon
-        case .none: return "text.magnifyingglass"
-        }
+        selectedCategory?.icon ?? "text.magnifyingglass"
     }
 
     private var keywordSectionColor: Color {
-        switch selectedCategory {
-        case .positive: return CommentCategory.positive.color
-        case .negative: return CommentCategory.negative.color
-        case .neutral: return CommentCategory.neutral.color
-        case .none: return .orange
-        }
+        selectedCategory?.color ?? .orange
     }
 
     /// 关键词由 Jieba 层 TF-IDF 计算（传入分类时已得到的 tokens，与 cut 同源，只分词一次）
