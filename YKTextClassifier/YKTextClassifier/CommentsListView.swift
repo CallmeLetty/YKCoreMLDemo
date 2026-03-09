@@ -260,9 +260,22 @@ struct CommentsListView: View {
             ]
             
             // 使用 PyTextClassifier：每条评论只执行一次「分词 + 分类」，同时保留每条的分词用于 TF-IDF
+            JiebaBridge.shared().setup()
             self.comments = sampleComments.map { comment in
                 var classified = comment
-                let (label, confidence, tokens) = (try? self.pyPredictor.predictWithTokens(text: comment.content)) ?? (.neutral, 0, [])
+                let (label, confidence, tokens): (YKClassifierType, Double, [String]) = {
+                    guard let result = try? self.pyPredictor.predictWithTokens(text: comment.content) else {
+                        // 预测失败时用 Jieba 单独分词，保证关键词栏有数据可展示
+                        let fallbackTokens = JiebaBridge.shared().cut(comment.content, useHMM: true) as? [String] ?? []
+                        return (.neutral, 0, fallbackTokens)
+                    }
+                    var (l, c, t) = result
+                    if t.isEmpty, !comment.content.isEmpty {
+                        let fallbackTokens = JiebaBridge.shared().cut(comment.content, useHMM: true) as? [String] ?? []
+                        t = fallbackTokens
+                    }
+                    return (l, c, t)
+                }()
                 classified.category = CommentCategory.fromPyPredict(label: label, confidence: confidence)
                 classified.tokens = tokens
                 return classified

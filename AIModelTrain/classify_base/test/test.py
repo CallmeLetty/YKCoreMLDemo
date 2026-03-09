@@ -3,10 +3,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import torch
-import torch.nn as nn
-import jieba
 import pickle
 from model_def import ChineseVocab, ChineseClassifier
+
+MAX_LEN = 50
+PAD_ID = 1
 
 # 加载词表和模型
 def load_resources():
@@ -23,23 +24,22 @@ def load_resources():
     return vocab, model, device
 
 def predict(text, vocab, model, device):
+    # 与训练、iOS 一致：用 vocab.encode（内部 _normalize_text + jieba），再 pad/截断到 MAX_LEN
+    ids = vocab.encode(text)
+    if len(ids) < MAX_LEN:
+        ids = ids + [PAD_ID] * (MAX_LEN - len(ids))
+    else:
+        ids = ids[:MAX_LEN]
+
     with torch.no_grad():
-        # 使用加载的词表进行编码
-        tokens = list(jieba.cut(text))
-        ids = [vocab.stoi.get(word, 0) for word in tokens]
-        
-        # 转换为张量，添加 batch 维度 [1, seq_len]
         ids_tensor = torch.tensor([ids], dtype=torch.int64).to(device)
-        
-        # 模型输出 [1, num_class]
         output = model(ids_tensor)
-        
-        # 使用 softmax 获取概率分布
         probs = torch.softmax(output, dim=1)
         pred_class = torch.argmax(probs, dim=1).item()
         confidence = probs[0][pred_class].item()
-        
-        return "正面 😄" if pred_class == 1 else "负面 😡", confidence
+    
+    # train.py 约定：0=正面 1=负面，与 iOS ClassifierConfig ['正面','负面'] 一致
+    return "正面 😄" if pred_class == 0 else "负面 😡", confidence
 
 if __name__ == "__main__":
     vocab, model, device = load_resources()

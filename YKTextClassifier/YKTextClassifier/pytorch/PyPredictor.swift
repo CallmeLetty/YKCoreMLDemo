@@ -19,7 +19,7 @@ class PyPredictor {
     /// 设为 true 时在控制台打印 token IDs，便于与 Python debug_pipeline.py 输出对比
     private let debugTokenIds = true
 
-    private lazy var tokenizer = VocabularyManager()
+    private lazy var tokenizer = PyVocabularyHandler()
 
     private let model: PyTextClassifier
     private var wordToId: [String: Int] = [:]

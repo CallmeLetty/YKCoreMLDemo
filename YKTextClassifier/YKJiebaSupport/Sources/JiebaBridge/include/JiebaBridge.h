@@ -6,6 +6,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (instancetype)shared;
 - (void)setup;
+
+/// 对文本进行中文分词，与 Python 端 jieba.cut 对齐，用于情感分类等场景。调用前需先 setup。
+/// @param text 待分词字符串（建议已做去标点预处理，与 Python _normalize_text 一致）
+/// @param useHMM 是否使用 HMM 识别未登录词，建议 YES，与 Python 默认行为一致
+/// @return 分词结果 token 数组，如 @[@"这期", @"聊", @"的", @"话题", ...]。text 为空或未初始化时返回 @[]
 - (NSArray<NSString *> *)cut:(NSString *)text useHMM:(BOOL)useHMM;
 
 /// 从文本中提取关键词（基于 IDF + 词频），用于如「负面评论痛点」等场景。topN 建议 5~15。

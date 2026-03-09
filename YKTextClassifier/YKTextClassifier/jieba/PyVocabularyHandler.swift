@@ -1,5 +1,5 @@
 //
-//  VocabularyManager.swift
+//  PyVocabularyHandler.swift
 //  YKTextClassifier
 //
 //  Created by Yakamoz on 2026/2/17.
@@ -30,7 +30,7 @@ private func normalizeForTokenize(_ text: String) -> String {
         .reduce("") { $0 + String($1) }
 }
 
-class VocabularyManager {
+class PyVocabularyHandler {
     // Jieba 初始化与状态读写
     private let jiebaQueue = DispatchQueue(label: "com.yk.vocabularymanager.jieba", qos: .userInitiated)
     // 仅在 jiebaQueue 上读写
@@ -43,10 +43,10 @@ class VocabularyManager {
             if self.isInitialized {
                 return
             }
-            print("[VocabularyManager] 开始初始化 Jieba...")
+            print("[PyVocabularyHandler] 开始初始化 Jieba...")
             JiebaBridge.shared().setup()
             self.isInitialized = true
-            print("[VocabularyManager] Jieba 初始化完成")
+            print("[PyVocabularyHandler] Jieba 初始化完成")
         }
     }
 
@@ -57,14 +57,14 @@ class VocabularyManager {
         jiebaQueue.sync { [weak self] in
             guard let self else { return }
             if !self.isInitialized {
-                print("[VocabularyManager] Jieba 尚未就绪，正在同步初始化...")
+                print("[PyVocabularyHandler] Jieba 尚未就绪，正在同步初始化...")
                 JiebaBridge.shared().setup()
                 self.isInitialized = true
             }
             result = JiebaBridge.shared().cut(normalized, useHMM: true)
         }
         if result.isEmpty && !text.isEmpty {
-            print("[VocabularyManager] ⚠️ 分词结果为空，输入: \(text)")
+            print("[PyVocabularyHandler] ⚠️ 分词结果为空，输入: \(text)")
         }
         return result
     }

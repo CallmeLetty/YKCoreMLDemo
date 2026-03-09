@@ -5,6 +5,7 @@
   python debug_pipeline.py "这个电影真的很好看"
   python debug_pipeline.py   # 使用默认测试句
 
+预处理与训练/iOS 一致：vocab.encode（内部 _normalize_text + jieba），再 pad/截断到 50。
 输出：分词结果、token IDs、填充后的 [1,50] 序列、Python 预测结果。
 在 iOS 端用同一句测试，对比 SentimentPredictor 打印的 token IDs 是否完全一致。
 """
@@ -15,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import torch
 import jieba
 import pickle
-from model_def import ChineseVocab, ChineseClassifier
+from model_def import ChineseVocab, ChineseClassifier, _normalize_text
 
 MAX_LENGTH = 50
 PAD_ID = 1
@@ -23,7 +24,7 @@ UNK_ID = 0
 
 
 def main():
-    text = sys.argv[1] if len(sys.argv) > 1 else "这个电影真的很好看"
+    text = sys.argv[1] if len(sys.argv) > 1 else "主播说得真的很好！"
 
     with open("vocab.pkl", "rb") as f:
         vocab = pickle.load(f)
@@ -32,20 +33,20 @@ def main():
     model.load_state_dict(torch.load("chinese_model.pth", map_location=device))
     model.eval()
 
-    # 1. 分词（与 iOS JiebaBridge.cut(useHMM: true) 应对齐）
-    tokens = list(jieba.cut(text))
-    # 2. 转 ID（与 iOS wordToId[token] ?? unkId 应对齐）
-    ids = [vocab.stoi.get(w, UNK_ID) for w in tokens]
-    # 3. 截断或填充到 50（与 iOS 一致：先 content 再 pad）
+    # 与训练、iOS 一致：先 _normalize_text 再 jieba，用 vocab.encode 得到 ID 序列
+    normalized = _normalize_text(text)
+    tokens = list(jieba.cut(normalized)) if normalized else []
+    ids = vocab.encode(text)
     if len(ids) < MAX_LENGTH:
         ids_padded = ids + [PAD_ID] * (MAX_LENGTH - len(ids))
     else:
         ids_padded = ids[:MAX_LENGTH]
 
     print("=" * 60)
-    print("【Python 端】便于与 iOS 对比")
+    print("【Python 端】便于与 iOS 对比（预处理=vocab.encode，与训练一致）")
     print("=" * 60)
     print(f"输入: {text}")
+    print(f"归一化后: {normalized!r}")
     print(f"分词: {tokens}")
     print(f"Token 数: {len(tokens)}")
     print(f"原始 ID 序列: {ids}")
@@ -60,9 +61,10 @@ def main():
         probs = torch.softmax(logits, dim=1)
         pred = torch.argmax(probs, dim=1).item()
         conf = probs[0][pred].item()
-    label = "正面" if pred == 1 else "负面"
+    # train.py 约定：0=正面 1=负面，与 iOS ClassifierConfig ['正面','负面'] 一致
+    label = "正面" if pred == 0 else "负面"
     print(f"\nPython 预测: {label} (类别 {pred}, 置信度 {conf:.4f})")
-    print(f"各类概率: 负面={probs[0][0].item():.4f}, 正面={probs[0][1].item():.4f}")
+    print(f"各类概率: 正面(dim0)={probs[0][0].item():.4f}, 负面(dim1)={probs[0][1].item():.4f}")
     print("=" * 60)
     print("请在 iOS 用同一句测试，并开启 debug 打印对比上述 ID 序列是否一致。")
     print("若 ID 一致但结果仍不同，请用 convert_to_coreml.py 以 FLOAT32 重新导出模型。")
