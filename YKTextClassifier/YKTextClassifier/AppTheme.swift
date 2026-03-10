@@ -7,13 +7,36 @@
 
 import SwiftUI
 
-// MARK: - 渐变色与主题色
+// MARK: - 日/夜间主题 Environment
+private struct IsDarkModeKey: EnvironmentKey {
+    static let defaultValue = true
+}
+extension EnvironmentValues {
+    var isDarkMode: Bool {
+        get { self[IsDarkModeKey.self] }
+        set { self[IsDarkModeKey.self] = newValue }
+    }
+}
+
+// MARK: - 渐变色与主题色（支持日/夜间）
 enum AppTheme {
     static let gradientStart = Color(red: 0.15, green: 0.12, blue: 0.28)
     static let gradientEnd = Color(red: 0.08, green: 0.06, blue: 0.18)
     static var backgroundGradient: LinearGradient {
-        LinearGradient(
-            colors: [gradientStart, gradientEnd],
+        backgroundGradient(dark: true)
+    }
+    
+    /// 根据日/夜间返回背景渐变
+    static func backgroundGradient(dark: Bool) -> LinearGradient {
+        if dark {
+            return LinearGradient(
+                colors: [gradientStart, gradientEnd],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+        return LinearGradient(
+            colors: [Color(red: 0.95, green: 0.94, blue: 0.98), Color(red: 0.88, green: 0.86, blue: 0.95)],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -28,6 +51,19 @@ enum AppTheme {
     static let cardBackground = Color.white.opacity(0.08)
     static let cardBorder = Color.white.opacity(0.12)
     static let glassOpacity: Double = 0.12
+    
+    /// 主文字色（随主题）
+    static func textPrimary(dark: Bool) -> Color {
+        dark ? Color.white.opacity(0.95) : Color.primary
+    }
+    
+    static func textSecondary(dark: Bool) -> Color {
+        dark ? Color.white.opacity(0.7) : Color.secondary
+ }
+    
+    static func cardStrokeColor(dark: Bool) -> Color {
+        dark ? Color.white.opacity(0.12) : Color.black.opacity(0.08)
+    }
 }
 
 // MARK: - 动效常量

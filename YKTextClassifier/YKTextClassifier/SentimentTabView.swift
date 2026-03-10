@@ -17,6 +17,7 @@ enum TextClassifierType: String, CaseIterable {
 }
 
 struct SentimentTabView: View {
+    @Environment(\.isDarkMode) private var isDarkMode
     // 共用 UI 状态
     @State private var selectedSubTab: TextClassifierType = .createML
     @State private var inputText: String = ""
@@ -48,8 +49,8 @@ struct SentimentTabView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // 背景渐变
-                AppTheme.backgroundGradient
+                // 背景渐变（随设置页日/夜间切换）
+                AppTheme.backgroundGradient(dark: isDarkMode)
                     .ignoresSafeArea()
 
                 VStack(spacing: 24) {
@@ -63,15 +64,16 @@ struct SentimentTabView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
                     .onAppear {
-                        // 深色背景下未选中文字改为浅色，否则看不见
-                        UISegmentedControl.appearance().setTitleTextAttributes(
-                            [.foregroundColor: UIColor.white.withAlphaComponent(0.85)],
-                            for: .normal
-                        )
-                        UISegmentedControl.appearance().setTitleTextAttributes(
-                            [.foregroundColor: UIColor.purple],
-                            for: .selected
-                        )
+                        let normalColor = isDarkMode ? UIColor.white.withAlphaComponent(0.85) : UIColor.darkGray
+                        let selectedColor = UIColor.purple
+                        UISegmentedControl.appearance().setTitleTextAttributes([.foregroundColor: normalColor], for: .normal)
+                        UISegmentedControl.appearance().setTitleTextAttributes([.foregroundColor: selectedColor], for: .selected)
+                    }
+                    .onChange(of: isDarkMode) { _, _ in
+                        let normalColor = isDarkMode ? UIColor.white.withAlphaComponent(0.85) : UIColor.darkGray
+                        let selectedColor = UIColor.purple
+                        UISegmentedControl.appearance().setTitleTextAttributes([.foregroundColor: normalColor], for: .normal)
+                        UISegmentedControl.appearance().setTitleTextAttributes([.foregroundColor: selectedColor], for: .selected)
                     }
 
                     // 输入框（卡片化 + 动效）
@@ -79,11 +81,11 @@ struct SentimentTabView: View {
                         Text("输入文本")
                             .font(.subheadline)
                             .fontWeight(.semibold)
-                            .foregroundColor(.white.opacity(0.9))
+                            .foregroundColor(AppTheme.textPrimary(dark: isDarkMode))
                         TextEditor(text: $inputText)
                             .frame(height: 140)
                             .scrollContentBackground(.hidden)
-                            .foregroundColor(.primary)
+                            .foregroundColor(isDarkMode ? .white : .primary)
                             .onChange(of: inputText) { _, _ in
                                 if realTimeAnalyzeEnabled {
                                     debounceTask?.cancel()
@@ -104,12 +106,12 @@ struct SentimentTabView: View {
                     HStack(spacing: 20) {
                         Toggle(isOn: $realTimeAnalyzeEnabled) {
                             Text("实时分析")
-                                .foregroundColor(.white.opacity(0.9))
+                                .foregroundColor(AppTheme.textPrimary(dark: isDarkMode))
                         }
                         .tint(Color(red: 0.55, green: 0.45, blue: 1.0))
                         Toggle(isOn: $showEmojiEnabled) {
                             Text("显示表情")
-                                .foregroundColor(.white.opacity(0.9))
+                                .foregroundColor(AppTheme.textPrimary(dark: isDarkMode))
                         }
                         .tint(Color(red: 0.55, green: 0.45, blue: 1.0))
                     }
@@ -161,16 +163,17 @@ struct SentimentTabView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
                             Text("分类结果")
-                                .bold()
+                                .fontWeight(.semibold)
                                 .font(.headline)
-                                .foregroundColor(.white.opacity(0.95))
+                                .foregroundColor(AppTheme.textPrimary(dark: isDarkMode))
                             Spacer()
                         }
                         ScrollView {
                             Text(displayedResult)
                                 .frame(maxWidth: .infinity,
                                        alignment: .leading)
-                                .foregroundColor(.white.opacity(0.9))
+                                .font(.subheadline)
+                                .foregroundColor(AppTheme.textPrimary(dark: isDarkMode))
                         }
                         .frame(height: 140)
                         .opacity(resultVisible ? 1 : 0)
@@ -201,7 +204,7 @@ struct SentimentTabView: View {
             }
             .navigationTitle("文本感情分类")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarColorScheme(isDarkMode ? .dark : .light, for: .navigationBar)
         }
     }
     

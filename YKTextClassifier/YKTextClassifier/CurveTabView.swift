@@ -24,6 +24,7 @@ struct SentimentSegment: Identifiable {
 }
 
 struct CurveTabView: View {
+    @Environment(\.isDarkMode) private var isDarkMode
     /// 本集时长（秒），默认 60 分钟
     private let episodeDuration: TimeInterval = 60 * 60
     /// 时间段长度（秒），默认 5 分钟
@@ -53,7 +54,7 @@ struct CurveTabView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AppTheme.backgroundGradient
+                AppTheme.backgroundGradient(dark: isDarkMode)
                     .ignoresSafeArea()
 
             Group {
@@ -79,7 +80,7 @@ struct CurveTabView: View {
                         }
                         Text("正在加载本集评论并分析情感…")
                             .font(.subheadline)
-                            .foregroundColor(.white.opacity(0.8))
+                            .foregroundColor(AppTheme.textPrimary(dark: isDarkMode))
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .onAppear { loadingPulse = true }
@@ -91,7 +92,7 @@ struct CurveTabView: View {
             }
             .navigationTitle("情感曲线图")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarColorScheme(isDarkMode ? .dark : .light, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: loadEpisodeData) {
@@ -124,10 +125,10 @@ struct CurveTabView: View {
             Text("暂无带时间戳的评论")
                 .font(.title3)
                 .fontWeight(.semibold)
-                .foregroundColor(.white.opacity(0.9))
+                .foregroundColor(AppTheme.textPrimary(dark: isDarkMode))
             Text("本集评论需包含时间戳才能生成情感曲线")
                 .font(.subheadline)
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(AppTheme.textSecondary(dark: isDarkMode))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
         }
@@ -140,13 +141,13 @@ struct CurveTabView: View {
                 // 说明
                 Text("按时间段统计本集评论情感分布，便于发现例如「某时段负面评论突增」等规律。")
                     .font(.subheadline)
-                    .foregroundColor(.white.opacity(0.75))
+                    .foregroundColor(AppTheme.textSecondary(dark: isDarkMode))
                 
                 HStack(alignment: .center, spacing: 10) {
                     Text("时间段")
                         .font(.subheadline)
                         .fontWeight(.medium)
-                        .foregroundColor(.white.opacity(0.9))
+                        .foregroundColor(AppTheme.textPrimary(dark: isDarkMode))
                     Picker("时间段", selection: $segmentChoice) {
                         ForEach(SegmentChoice.allCases, id: \.self) { choice in
                             Text(choice.rawValue).tag(choice)
@@ -199,7 +200,7 @@ struct CurveTabView: View {
                         AxisValueLabel {
                             if let i = value.as(Int.self), i >= 0, i < segments.count {
                                 Text(segments[i].label)
-                                    .foregroundStyle(.white.opacity(0.8))
+                                    .foregroundStyle(AppTheme.textPrimary(dark: isDarkMode))
                             }
                         }
                     }
@@ -232,10 +233,10 @@ struct CurveTabView: View {
                             Text("建议关注")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
-                                .foregroundColor(.white.opacity(0.95))
+                                .foregroundColor(AppTheme.textPrimary(dark: isDarkMode))
                             Text("\(Self.formatTime(spike.startSeconds))–\(Self.formatTime(spike.endSeconds)) 时段内负面评论较多（\(spike.negativeCount) 条），可回顾该段内容是否需优化。")
                                 .font(.caption)
-                                .foregroundColor(.white.opacity(0.75))
+                                .foregroundColor(AppTheme.textSecondary(dark: isDarkMode))
                         }
                         Spacer()
                     }
@@ -271,7 +272,7 @@ struct CurveTabView: View {
                 .frame(width: 10, height: 10)
             Text(text)
                 .font(.caption)
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(AppTheme.textPrimary(dark: isDarkMode))
         }
     }
     

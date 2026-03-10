@@ -7,7 +7,6 @@
 
 import NaturalLanguage
 import SwiftUI
-import UIKit
 import CoreML
 import YKJiebaSupport
 
@@ -77,6 +76,7 @@ struct Comment: Identifiable {
 
 // 第二个Tab - 评论分类
 struct CommentsListView: View {
+    @Environment(\.isDarkMode) private var isDarkMode
     @State private var comments: [Comment] = []
     @State private var isLoading = false
     @State private var selectedCategory: CommentCategory? = nil
@@ -133,10 +133,20 @@ struct CommentsListView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                AppTheme.backgroundGradient
+                AppTheme.backgroundGradient(dark: isDarkMode)
                     .ignoresSafeArea()
 
             VStack(spacing: 0) {
+                // 自定义大标题（保证暗黑下为白色，不依赖系统 navigationTitle）
+                Text("评论分类")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                    .foregroundColor(AppTheme.textPrimary(dark: isDarkMode))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
+                
                 // 统计卡片（带入场动效）
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 15) {
@@ -162,7 +172,7 @@ struct CommentsListView: View {
                     .padding(.horizontal, 20)
                     .padding(.vertical, 16)
                 }
-                .background(Color.black.opacity(0.2))
+                .background(isDarkMode ? Color.black.opacity(0.2) : Color.white.opacity(0.3))
 
                 // 关键词：根据当前选中的评论分类提取并展示
                 if !painPointKeywords.isEmpty {
@@ -174,7 +184,7 @@ struct CommentsListView: View {
                             Text(keywordSectionTitle)
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
-                                .foregroundColor(.white.opacity(0.95))
+                                .foregroundColor(AppTheme.textPrimary(dark: isDarkMode))
                         }
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
@@ -197,7 +207,7 @@ struct CommentsListView: View {
                     }
                     .padding(.vertical, 12)
                     .padding(.horizontal, 20)
-                    .background(Color.black.opacity(0.15))
+                    .background(isDarkMode ? Color.black.opacity(0.15) : Color.white.opacity(0.5))
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
@@ -208,7 +218,7 @@ struct CommentsListView: View {
                             .font(.system(size: 56))
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: [.white.opacity(0.6), .white.opacity(0.3)],
+                                    colors: isDarkMode ? [.white.opacity(0.6), .white.opacity(0.3)] : [.gray.opacity(0.5), .gray.opacity(0.3)],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
@@ -216,7 +226,7 @@ struct CommentsListView: View {
                         Text("暂无评论")
                             .font(.title3)
                             .fontWeight(.semibold)
-                            .foregroundColor(.white.opacity(0.8))
+                            .foregroundColor(AppTheme.textPrimary(dark: isDarkMode))
                         Button(action: loadComments) {
                             Label("加载示例评论", systemImage: "arrow.clockwise")
                                 .font(.headline)
@@ -239,8 +249,8 @@ struct CommentsListView: View {
                     List {
                         ForEach(Array(filteredComments.enumerated()), id: \.element.id) { index, comment in
                             CommentRow(comment: comment)
-                                .listRowBackground(Color.white.opacity(0.06))
-                                .listRowSeparatorTint(.white.opacity(0.1))
+                                .listRowBackground(isDarkMode ? Color.white.opacity(0.06) : Color.white.opacity(0.8))
+                                .listRowSeparatorTint(isDarkMode ? .white.opacity(0.1) : .black.opacity(0.08))
                                 .staggeredAppear(index: index)
                         }
                     }
@@ -248,13 +258,9 @@ struct CommentsListView: View {
                     .scrollContentBackground(.hidden)
                 }
             }
-            .navigationTitle(Text("评论分类").foregroundStyle(Color.white))
-            .navigationBarTitleDisplayMode(.large)
-            .toolbarColorScheme(.dark, for: .navigationBar)
-            .onAppear {
-                UINavigationBar.appearance().largeTitleTextAttributes = [.foregroundColor: UIColor.white]
-                UINavigationBar.appearance().titleTextAttributes = [.foregroundColor: UIColor.white]
-            }
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(isDarkMode ? .dark : .light, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: loadComments) {
@@ -339,6 +345,7 @@ struct CommentsListView: View {
 
 // 分类卡片视图
 struct CategoryCard: View {
+    @Environment(\.isDarkMode) private var isDarkMode
     let category: CommentCategory
     let count: Int
     let isSelected: Bool
@@ -355,12 +362,12 @@ struct CategoryCard: View {
                 Text("\(count)")
                     .font(.title)
                     .fontWeight(.bold)
-                    .foregroundColor(.white.opacity(0.95))
+                    .foregroundColor(AppTheme.textPrimary(dark: isDarkMode))
             }
 
             Text(category.rawValue)
                 .font(.subheadline)
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(AppTheme.textSecondary(dark: isDarkMode))
         }
         .padding(16)
         .frame(width: 140, height: 100)
@@ -369,7 +376,7 @@ struct CategoryCard: View {
                 .fill(.ultraThinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(isSelected ? category.color.opacity(0.8) : Color.white.opacity(0.1), lineWidth: isSelected ? 2.5 : 1)
+                        .stroke(isSelected ? category.color.opacity(0.8) : AppTheme.cardStrokeColor(dark: isDarkMode), lineWidth: isSelected ? 2.5 : 1)
                 )
         )
         .shadow(color: (isSelected ? category.color.opacity(0.3) : .clear), radius: 12, y: 4)
@@ -378,6 +385,7 @@ struct CategoryCard: View {
 
 // 评论行视图
 struct CommentRow: View {
+    @Environment(\.isDarkMode) private var isDarkMode
     let comment: Comment
 
     var body: some View {
@@ -386,7 +394,7 @@ struct CommentRow: View {
                 Text(comment.author)
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(AppTheme.textPrimary(dark: isDarkMode))
 
                 Spacer()
 
@@ -407,12 +415,12 @@ struct CommentRow: View {
 
             Text(comment.content)
                 .font(.body)
-                .foregroundColor(.white.opacity(0.85))
+                .foregroundColor(AppTheme.textPrimary(dark: isDarkMode).opacity(0.9))
                 .lineLimit(nil)
 
             Text(comment.date, style: .time)
                 .font(.caption)
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(AppTheme.textSecondary(dark: isDarkMode))
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 4)
