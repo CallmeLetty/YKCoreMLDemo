@@ -7,6 +7,7 @@
 
 import NaturalLanguage
 import SwiftUI
+import UIKit
 import CoreML
 import YKJiebaSupport
 
@@ -81,6 +82,8 @@ struct CommentsListView: View {
     @State private var selectedCategory: CommentCategory? = nil
     /// 当前筛选条件下提取的关键词（随选中的评论分类变化）
     @State private var painPointKeywords: [String] = []
+    @State private var cardsAppeared = false
+    @State private var keywordSectionAppeared = false
     private let pyPredictor = PyPredictor()
 
     var filteredComments: [Comment] {
@@ -129,103 +132,150 @@ struct CommentsListView: View {
 
     var body: some View {
         NavigationView {
+            ZStack {
+                AppTheme.backgroundGradient
+                    .ignoresSafeArea()
+
             VStack(spacing: 0) {
-                // 统计卡片
+                // 统计卡片（带入场动效）
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 15) {
-                        ForEach(CommentCategory.allCases, id: \.self) { category in
+                        ForEach(Array(CommentCategory.allCases.enumerated()), id: \.element) { index, category in
                             CategoryCard(
                                 category: category,
                                 count: categoryCounts[category] ?? 0,
                                 isSelected: selectedCategory == category
                             )
+                            .opacity(cardsAppeared ? 1 : 0)
+                            .offset(y: cardsAppeared ? 0 : 20)
+                            .animation(AppAnimation.springSmooth.delay(Double(index) * AppAnimation.staggerDelay), value: cardsAppeared)
                             .onTapGesture {
-                                withAnimation {
+                                withAnimation(AppAnimation.springBouncy) {
                                     selectedCategory = selectedCategory == category ? nil : category
                                     extractKeywordsForCurrentFilter()
+                                    keywordSectionAppeared = false
+                                    withAnimation(AppAnimation.springQuick.delay(0.1)) { keywordSectionAppeared = true }
                                 }
                             }
                         }
                     }
-                    .padding()
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
                 }
-                .background(Color(.systemGroupedBackground))
+                .background(Color.black.opacity(0.2))
 
                 // 关键词：根据当前选中的评论分类提取并展示
                 if !painPointKeywords.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 10) {
                         HStack {
                             Image(systemName: keywordSectionIcon)
+                                .font(.subheadline)
                                 .foregroundColor(keywordSectionColor)
                             Text(keywordSectionTitle)
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
-                                .foregroundColor(.primary)
+                                .foregroundColor(.white.opacity(0.95))
                         }
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
-                                ForEach(painPointKeywords, id: \.self) { word in
+                                ForEach(Array(painPointKeywords.enumerated()), id: \.offset) { index, word in
                                     Text(word)
                                         .font(.caption)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 6)
-                                        .background(keywordSectionColor.opacity(0.15))
+                                        .fontWeight(.medium)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                        .background(keywordSectionColor.opacity(0.25))
                                         .foregroundColor(keywordSectionColor)
-                                        .cornerRadius(8)
+                                        .cornerRadius(10)
+                                        .opacity(keywordSectionAppeared ? 1 : 0)
+                                        .scaleEffect(keywordSectionAppeared ? 1 : 0.8)
+                                        .animation(AppAnimation.springBouncy.delay(Double(index) * 0.03), value: keywordSectionAppeared)
                                 }
                             }
                             .padding(.horizontal, 4)
                         }
                     }
-                    .padding(.vertical, 8)
-                    .padding(.horizontal)
-                    .background(Color(.systemBackground))
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 20)
+                    .background(Color.black.opacity(0.15))
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
                 // 评论列表
                 if comments.isEmpty {
-                    VStack(spacing: 20) {
-                        Image(systemName: "text.bubble")
-                            .font(.system(size: 60))
-                            .foregroundColor(.gray)
-
+                    VStack(spacing: 24) {
+                        Image(systemName: "text.bubble.fill")
+                            .font(.system(size: 56))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [.white.opacity(0.6), .white.opacity(0.3)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
                         Text("暂无评论")
-                            .font(.headline)
-                            .foregroundColor(.gray)
-
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white.opacity(0.8))
                         Button(action: loadComments) {
                             Label("加载示例评论", systemImage: "arrow.clockwise")
-                                .padding()
-                                .background(Color.blue)
+                                .font(.headline)
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 14)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .fill(LinearGradient(
+                                            colors: [Color(red: 0.45, green: 0.35, blue: 1.0), Color(red: 0.6, green: 0.4, blue: 1.0)],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        ))
+                                )
                                 .foregroundColor(.white)
-                                .cornerRadius(10)
                         }
+                        .buttonStyle(.plain)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List {
-                        ForEach(filteredComments) { comment in
+                        ForEach(Array(filteredComments.enumerated()), id: \.element.id) { index, comment in
                             CommentRow(comment: comment)
+                                .listRowBackground(Color.white.opacity(0.06))
+                                .listRowSeparatorTint(.white.opacity(0.1))
+                                .staggeredAppear(index: index)
                         }
                     }
-                    .listStyle(PlainListStyle())
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
                 }
             }
-            .navigationTitle("评论分类")
+            .navigationTitle(Text("评论分类").foregroundStyle(Color.white))
             .navigationBarTitleDisplayMode(.large)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .onAppear {
+                UINavigationBar.appearance().largeTitleTextAttributes = [.foregroundColor: UIColor.white]
+                UINavigationBar.appearance().titleTextAttributes = [.foregroundColor: UIColor.white]
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: loadComments) {
                         Image(systemName: "arrow.clockwise")
+                            .fontWeight(.medium)
                     }
                     .disabled(isLoading)
                 }
+            }
             }
         }
         .onAppear {
             if comments.isEmpty {
                 loadComments()
             }
+            withAnimation(AppAnimation.springSmooth.delay(0.1)) { cardsAppeared = true }
+            if !painPointKeywords.isEmpty { keywordSectionAppeared = true }
+        }
+        .onChange(of: painPointKeywords) { _, _ in
+            keywordSectionAppeared = false
+            withAnimation(AppAnimation.springQuick.delay(0.05)) { keywordSectionAppeared = true }
         }
     }
     
@@ -294,7 +344,7 @@ struct CategoryCard: View {
     let isSelected: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Image(systemName: category.icon)
                     .font(.title2)
@@ -305,21 +355,24 @@ struct CategoryCard: View {
                 Text("\(count)")
                     .font(.title)
                     .fontWeight(.bold)
+                    .foregroundColor(.white.opacity(0.95))
             }
 
             Text(category.rawValue)
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.white.opacity(0.7))
         }
-        .padding()
+        .padding(16)
         .frame(width: 140, height: 100)
-        .background(isSelected ? category.color.opacity(0.1) : Color(.systemBackground))
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(isSelected ? category.color : Color.clear, lineWidth: 2)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(isSelected ? category.color.opacity(0.8) : Color.white.opacity(0.1), lineWidth: isSelected ? 2.5 : 1)
+                )
         )
-        .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+        .shadow(color: (isSelected ? category.color.opacity(0.3) : .clear), radius: 12, y: 4)
     }
 }
 
@@ -328,39 +381,41 @@ struct CommentRow: View {
     let comment: Comment
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(comment.author)
                     .font(.subheadline)
                     .fontWeight(.semibold)
+                    .foregroundColor(.white.opacity(0.9))
 
                 Spacer()
 
                 if let category = comment.category {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 6) {
                         Image(systemName: category.icon)
                             .font(.caption)
                         Text(category.rawValue)
                             .font(.caption)
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(category.color.opacity(0.2))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(category.color.opacity(0.25))
                     .foregroundColor(category.color)
-                    .cornerRadius(8)
+                    .cornerRadius(10)
                 }
             }
 
             Text(comment.content)
                 .font(.body)
-                .foregroundColor(.primary)
+                .foregroundColor(.white.opacity(0.85))
                 .lineLimit(nil)
 
             Text(comment.date, style: .time)
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(.white.opacity(0.5))
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 4)
     }
 }
 

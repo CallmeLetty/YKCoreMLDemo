@@ -19,28 +19,39 @@ struct TextClassifierApp: App {
 }
 
 struct MainTabView: View {
+    @State private var selectedTab: Int = 0
+    
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             // Tab 1: 文本感情分类（内含顶部三个子 Tab）
             SentimentTabView()
                 .tabItem {
                     Label("文本感情分类", systemImage: "doc.text.magnifyingglass")
                 }
+                .tag(0)
 
             // Tab 2: 评论分类
             CommentsListView()
                 .tabItem {
                     Label("评论分类", systemImage: "bubble.left.and.bubble.right")
                 }
+                .tag(1)
             
             // Tab 3: 情感曲线图
             CurveTabView()
                 .tabItem {
                     Label("情感曲线图", systemImage: "chart.line.uptrend.xyaxis")
                 }
+                .tag(2)
         }
+        .tint(Color(red: 0.55, green: 0.45, blue: 1.0))
         .onAppear {
-             Task {
+            // 统一 Tab 栏毛玻璃
+            let appearance = UITabBarAppearance()
+            appearance.configureWithDefaultBackground()
+            UITabBar.appearance().standardAppearance = appearance
+            UITabBar.appearance().scrollEdgeAppearance = appearance
+            Task {
                  do {
                      let req = CommentListPrimaryRequest(
                          targetId: "episode_id_xxx",

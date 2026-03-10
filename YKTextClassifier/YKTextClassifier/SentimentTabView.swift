@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 enum TextClassifierType: String, CaseIterable {
     case createML = "CreateML"
@@ -35,6 +36,8 @@ struct SentimentTabView: View {
     @State private var showEmoji: Bool = false
     @State private var currentEmoji: String = ""
     @State private var emojiScale: CGFloat = 0.5
+    @State private var resultVisible: Bool = false
+    @State private var analyzeButtonPressed: Bool = false
 
     
     /// 当前选中的 Tab 对应的结果文案
@@ -45,7 +48,11 @@ struct SentimentTabView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                VStack(spacing: 20) {
+                // 背景渐变
+                AppTheme.backgroundGradient
+                    .ignoresSafeArea()
+
+                VStack(spacing: 24) {
                     // 顶部分段：切换解析方式
                     Picker("", selection: $selectedSubTab) {
                         ForEach(TextClassifierType.allCases, id: \.self) { tab in
@@ -53,89 +60,148 @@ struct SentimentTabView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-
-                    // 输入框（唯一）
-                    TextEditor(text: $inputText)
-                        .frame(height: 150)
-                        .padding(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.gray.opacity(0.5), lineWidth: 1)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .onAppear {
+                        // 深色背景下未选中文字改为浅色，否则看不见
+                        UISegmentedControl.appearance().setTitleTextAttributes(
+                            [.foregroundColor: UIColor.white.withAlphaComponent(0.85)],
+                            for: .normal
                         )
-                        .padding(.horizontal)
-                        .onChange(of: inputText) { _, _ in
-                            if realTimeAnalyzeEnabled {
-                                debounceTask?.cancel()
-                                debounceTask = Task {
-                                    try? await Task.sleep(nanoseconds: 500_000_000)
-                                    if !Task.isCancelled {
-                                        analyzeText()
+                        UISegmentedControl.appearance().setTitleTextAttributes(
+                            [.foregroundColor: UIColor.purple],
+                            for: .selected
+                        )
+                    }
+
+                    // 输入框（卡片化 + 动效）
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("输入文本")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white.opacity(0.9))
+                        TextEditor(text: $inputText)
+                            .frame(height: 140)
+                            .scrollContentBackground(.hidden)
+                            .foregroundColor(.primary)
+                            .onChange(of: inputText) { _, _ in
+                                if realTimeAnalyzeEnabled {
+                                    debounceTask?.cancel()
+                                    debounceTask = Task {
+                                        try? await Task.sleep(nanoseconds: 500_000_000)
+                                        if !Task.isCancelled {
+                                            analyzeText()
+                                        }
                                     }
                                 }
                             }
+                    }
+                    .padding(16)
+                    .cardStyle()
+                    .padding(.horizontal, 20)
+
+                    // 开关行
+                    HStack(spacing: 20) {
+                        Toggle(isOn: $realTimeAnalyzeEnabled) {
+                            Text("实时分析")
+                                .foregroundColor(.white.opacity(0.9))
                         }
-
-                    // 实时分析 开关
-                    Toggle(isOn: $realTimeAnalyzeEnabled) {
-                        Text("实时分析")
+                        .tint(Color(red: 0.55, green: 0.45, blue: 1.0))
+                        Toggle(isOn: $showEmojiEnabled) {
+                            Text("显示表情")
+                                .foregroundColor(.white.opacity(0.9))
+                        }
+                        .tint(Color(red: 0.55, green: 0.45, blue: 1.0))
                     }
-                    .padding(.horizontal)
-                    // showEmoji 开关
-                    Toggle(isOn: $showEmojiEnabled) {
-                        Text("显示表情")
-                    }
-                    .padding(.horizontal)
+                    .padding(.horizontal, 20)
 
-                    // 分析按钮（唯一）
-                    Button(action: { analyzeText() }) {
-                        HStack {
+                    // 分析按钮（渐变 + 按压动效）
+                    Button(action: {
+                        withAnimation(AppAnimation.springQuick) { analyzeButtonPressed = true }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            analyzeText()
+                            withAnimation(AppAnimation.springQuick) { analyzeButtonPressed = false }
+                        }
+                    }) {
+                        HStack(spacing: 10) {
                             if isAnalyzing {
                                 ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle())
-                                    .scaleEffect(0.8)
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(0.9)
                             }
                             Text(isAnalyzing ? "分析中..." : "分析文本")
+                                .fontWeight(.semibold)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(inputText.isEmpty ? Color.gray : Color.blue)
+                        .padding(.vertical, 16)
+                        .background(
+                            Group {
+                                if inputText.isEmpty {
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .fill(Color.gray.opacity(0.5))
+                                } else {
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .fill(LinearGradient(
+                                            colors: [Color(red: 0.45, green: 0.35, blue: 1.0), Color(red: 0.6, green: 0.4, blue: 1.0)],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        ))
+                                }
+                            }
+                        )
                         .foregroundColor(.white)
-                        .cornerRadius(10)
+                        .shadow(color: (inputText.isEmpty ? .clear : Color.purple.opacity(0.4)), radius: 12, y: 4)
                     }
+                    .buttonStyle(.plain)
+                    .scaleEffect(analyzeButtonPressed ? 0.97 : 1.0)
                     .disabled(inputText.isEmpty || isAnalyzing)
-                    .padding(.horizontal)
+                    .padding(.horizontal, 20)
 
-                    // 分类结果：当前 Tab 对应方式的解析结果
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("分类结果：")
-                            .font(.headline)
+                    // 分类结果（卡片 + 入场动效）
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("分类结果")
+                                .bold()
+                                .font(.headline)
+                                .foregroundColor(.white.opacity(0.95))
+                            Spacer()
+                        }
                         ScrollView {
                             Text(displayedResult)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding()
-                                .background(Color.gray.opacity(0.1))
-                                .cornerRadius(8)
+                                .frame(maxWidth: .infinity,
+                                       alignment: .leading)
+                                .foregroundColor(.white.opacity(0.9))
                         }
-                        .frame(height: 150)
+                        .frame(height: 140)
+                        .opacity(resultVisible ? 1 : 0)
+                        .offset(y: resultVisible ? 0 : 8)
                     }
-                    .padding(.horizontal)
+                    .padding(16)
+                    .cardStyle()
+                    .padding(.horizontal, 20)
+                    .onChange(of: displayedResult) { _, _ in
+                        withAnimation(AppAnimation.springSmooth) { resultVisible = true }
+                    }
 
                     Spacer()
                 }
-                .padding()
-                .onAppear { predictor.loadCreateMLModelIfNeeded() }
+                .padding(.vertical, 8)
+                .onAppear {
+                    predictor.loadCreateMLModelIfNeeded()
+                    withAnimation(AppAnimation.springSmooth.delay(0.15)) { resultVisible = true }
+                }
 
-                // 跳动表情层（三种方式得到正面/负面时都可触发）
+                // 跳动表情层
                 if showEmoji {
                     Text(currentEmoji)
                         .font(.system(size: 100))
                         .scaleEffect(emojiScale)
+                        .shadow(color: .black.opacity(0.3), radius: 20)
                 }
             }
             .navigationTitle("文本感情分类")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
         }
     }
     

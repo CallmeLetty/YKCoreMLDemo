@@ -33,6 +33,8 @@ struct CurveTabView: View {
     @State private var segments: [SentimentSegment] = []
     @State private var isLoading = true
     @State private var segmentChoice: SegmentChoice = .fiveMin
+    @State private var chartAppeared = false
+    @State private var loadingPulse = false
     
     private let pyPredictor = PyPredictor()
     
@@ -50,15 +52,37 @@ struct CurveTabView: View {
     
     var body: some View {
         NavigationStack {
+            ZStack {
+                AppTheme.backgroundGradient
+                    .ignoresSafeArea()
+
             Group {
                 if isLoading {
-                    VStack(spacing: 16) {
-                        ProgressView()
+                    VStack(spacing: 24) {
+                        ZStack {
+                            Circle()
+                                .stroke(Color.white.opacity(0.2), lineWidth: 4)
+                                .frame(width: 56, height: 56)
+                            Circle()
+                                .trim(from: 0, to: 0.7)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [Color(red: 0.5, green: 0.4, blue: 1.0), Color(red: 0.7, green: 0.5, blue: 1.0)],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    ),
+                                    style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                                )
+                                .frame(width: 56, height: 56)
+                                .rotationEffect(.degrees(loadingPulse ? 360 : 0))
+                                .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: loadingPulse)
+                        }
                         Text("正在加载本集评论并分析情感…")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.white.opacity(0.8))
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .onAppear { loadingPulse = true }
                 } else if segments.isEmpty {
                     emptyState
                 } else {
@@ -67,13 +91,16 @@ struct CurveTabView: View {
             }
             .navigationTitle("情感曲线图")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: loadEpisodeData) {
                         Image(systemName: "arrow.clockwise")
+                            .fontWeight(.medium)
                     }
                     .disabled(isLoading)
                 }
+            }
             }
         }
         .onAppear {
@@ -84,35 +111,42 @@ struct CurveTabView: View {
     }
     
     private var emptyState: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 24) {
             Image(systemName: "chart.line.uptrend.xyaxis")
-                .font(.system(size: 50))
-                .foregroundColor(.gray)
+                .font(.system(size: 56))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [.white.opacity(0.5), .white.opacity(0.2)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
             Text("暂无带时间戳的评论")
-                .font(.headline)
-                .foregroundColor(.secondary)
+                .font(.title3)
+                .fontWeight(.semibold)
+                .foregroundColor(.white.opacity(0.9))
             Text("本集评论需包含时间戳才能生成情感曲线")
-                .font(.caption)
-                .foregroundColor(.secondary)
+                .font(.subheadline)
+                .foregroundColor(.white.opacity(0.6))
                 .multilineTextAlignment(.center)
-                .padding(.horizontal)
+                .padding(.horizontal, 32)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
     private var chartContent: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 24) {
                 // 说明
                 Text("按时间段统计本集评论情感分布，便于发现例如「某时段负面评论突增」等规律。")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.white.opacity(0.75))
                 
                 HStack(alignment: .center, spacing: 10) {
                     Text("时间段")
                         .font(.subheadline)
-                        .foregroundColor(.primary)
-                    // 时间段选择
+                        .fontWeight(.medium)
+                        .foregroundColor(.white.opacity(0.9))
                     Picker("时间段", selection: $segmentChoice) {
                         ForEach(SegmentChoice.allCases, id: \.self) { choice in
                             Text(choice.rawValue).tag(choice)
@@ -120,11 +154,13 @@ struct CurveTabView: View {
                     }
                     .pickerStyle(.segmented)
                     .onChange(of: segmentChoice) { _, _ in
-                        recomputeSegments(segmentLength: segmentChoice.seconds)
+                        withAnimation(AppAnimation.springQuick) {
+                            recomputeSegments(segmentLength: segmentChoice.seconds)
+                        }
                     }
                 }
                 
-                // 曲线图：三条线分别表示好评、批评、中立（用数值 X 轴使 0:00 从最左侧开始）
+                // 曲线图
                 Chart {
                     ForEach(segments) { seg in
                         LineMark(
@@ -158,60 +194,84 @@ struct CurveTabView: View {
                 .chartXScale(domain: 0 ... max(0, segments.count - 1))
                 .chartXAxis {
                     AxisMarks(values: .stride(by: 1)) { value in
-                        AxisGridLine()
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
+                            .foregroundStyle(Color.white.opacity(0.15))
                         AxisValueLabel {
                             if let i = value.as(Int.self), i >= 0, i < segments.count {
                                 Text(segments[i].label)
+                                    .foregroundStyle(.white.opacity(0.8))
                             }
                         }
                     }
                 }
+                .chartYAxis {
+                    AxisMarks()
+                }
                 .chartYAxisLabel("评论数")
                 .chartXAxisLabel("节目时间")
                 .frame(height: 260)
+                .opacity(chartAppeared ? 1 : 0)
+                .offset(y: chartAppeared ? 0 : 20)
                 
                 // 图例
-                HStack(spacing: 20) {
+                HStack(spacing: 24) {
                     legendItem(color: CommentCategory.positive.color, text: "好评")
                     legendItem(color: CommentCategory.negative.color, text: "批评建议")
                     legendItem(color: CommentCategory.neutral.color, text: "中立讨论")
                 }
                 .padding(.vertical, 8)
+                .opacity(chartAppeared ? 1 : 0)
                 
                 // 提示：若某时段负面突增
                 if let spike = segments.first(where: { $0.negativeCount >= 3 && $0.negativeCount > $0.positiveCount }) {
-                    HStack(alignment: .top, spacing: 8) {
+                    HStack(alignment: .top, spacing: 12) {
                         Image(systemName: "lightbulb.fill")
+                            .font(.title3)
                             .foregroundColor(.orange)
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: 6) {
                             Text("建议关注")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
+                                .foregroundColor(.white.opacity(0.95))
                             Text("\(Self.formatTime(spike.startSeconds))–\(Self.formatTime(spike.endSeconds)) 时段内负面评论较多（\(spike.negativeCount) 条），可回顾该段内容是否需优化。")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.white.opacity(0.75))
                         }
                         Spacer()
                     }
-                    .padding()
-                    .background(Color.orange.opacity(0.1))
-                    .cornerRadius(10)
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(Color.orange.opacity(0.15))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color.orange.opacity(0.35), lineWidth: 1)
+                            )
+                    )
                 }
                 
                 Spacer(minLength: 40)
             }
-            .padding()
+            .padding(20)
+        }
+        .scrollContentBackground(.hidden)
+        .onAppear {
+            withAnimation(AppAnimation.springSmooth.delay(0.2)) { chartAppeared = true }
+        }
+        .onChange(of: segments.count) { _, _ in
+            chartAppeared = false
+            withAnimation(AppAnimation.springSmooth.delay(0.1)) { chartAppeared = true }
         }
     }
     
     private func legendItem(color: Color, text: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             Circle()
                 .fill(color)
                 .frame(width: 10, height: 10)
             Text(text)
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(.white.opacity(0.8))
         }
     }
     
